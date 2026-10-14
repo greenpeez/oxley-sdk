@@ -1,0 +1,55 @@
+{
+  "repository": "https://github.com/0xProject/0x-settler",
+  "commit": "0148a16f3f90ee09ac5f56c8da17f230f5fa5282",
+  "boundary": "Unmodified BASIC implementation and its utilities; test base replaces abstract funding/context dependencies. Not a full Settler acceptance test.",
+  "evidence": [
+    {
+      "path": "core/Basic.sol",
+      "sha256": "cefcbf02f886222c795ad7cbd6786fc094e2dc5efb197045a7651499bdb95d4a"
+    },
+    {
+      "path": "core/Constants.sol",
+      "sha256": "ac32b54e9351946b8e4d3862b5af9a0bf1b40f1368d5bc3c6402763224c07415"
+    },
+    {
+      "path": "core/SettlerErrors.sol",
+      "sha256": "c44e470e0e9d67083753067a7db01974ade3cbf1871c9358c49725702755b539"
+    },
+    {
+      "path": "vendor/SafeTransferLib.sol",
+      "sha256": "3a983f0983bb0b8f4cf517d05e8a5b940a2264920b9579a6bf1804f3ab2a4cce"
+    },
+    {
+      "path": "utils/Panic.sol",
+      "sha256": "e846806bdbcadf20b412b4bf9a07b2f0893e4f6ac7f3c147dc879a04d7581578"
+    },
+    {
+      "path": "utils/Revert.sol",
+      "sha256": "1975e83c04bd9cc44563243ec133505fa06f269b1b8b9c9d6e310431675867b6"
+    },
+    {
+      "path": "utils/UnsafeMath.sol",
+      "sha256": "0ab8725ed4909ccdb6ffb846af08ca0b01980871655585833df422523dfb3ec3"
+    },
+    {
+      "path": "utils/512Math.sol",
+      "sha256": "f88ef77f299a61dfb5e50b5d9c762101d6ea93398b9db18fb6cff0232ebaf271"
+    },
+    {
+      "path": "vendor/Clz.sol",
+      "sha256": "246524b02056a5632941b59571e392c7013136e7e367178db4181b7157f0e94c"
+    },
+    {
+      "path": "utils/Ternary.sol",
+      "sha256": "2f3842ac5211939bab665db9e0ed9219fd7e77016c2665f5d28a084c22f3d6d0"
+    },
+    {
+      "path": "utils/FastLogic.sol",
+      "sha256": "ac46c10d85eb25ed2e28735535ecf70d05e3810809533b2b130282a009fa2959"
+    },
+    {
+      "path": "vendor/Sqrt.sol",
+      "sha256": "14672bc1e44b48097792816216279bc4809cbbf9f5d3a593ecb4bbd5ef23947a"
+    }
+  ]
+}

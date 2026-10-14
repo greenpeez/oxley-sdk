@@ -1,0 +1,50 @@
+{
+  "build": "VNext flat-fee 2026-10-08; Solidity 0.8.26 Cancun optimizer 200",
+  "evidence": [
+    {
+      "name": "ElysiumReserveCurveVNext",
+      "originalArtifactSha256": "606a19fa8faaff8e3f9198fcf373561c32bacad75321d4dce71a6cbc4ea2a8a0",
+      "fixtureSha256": "d6bd55f13e8e7172affb4350e571d888a340972c798548cede42f58affa7adba"
+    },
+    {
+      "name": "ElysiumFeeRouterVNext",
+      "originalArtifactSha256": "4abb393f1dc248239e44d6d43b1e303555d8a97dcd282fd8f9f95700f21ac268",
+      "fixtureSha256": "1c20a733d3ec29cf2f4a95c29a057ca101114a7fee71d1aadb7f72e07944daa8"
+    },
+    {
+      "name": "ElysiumListingVault",
+      "originalArtifactSha256": "dcf4105a87997389c32e9c0321d2abe57bffbce797567721cf428b6046beb1d9",
+      "fixtureSha256": "adf145be7d42336d1e6e0b148588c49f70e8e80ae257d0fb7641fdd3c7ba1f09"
+    },
+    {
+      "name": "ElysiumDealRegistry",
+      "originalArtifactSha256": "a5a7763fa4d10488e83378da3e1896b1c6a456eeee658c9b8807a4e0374b58f5",
+      "fixtureSha256": "c889340f64dbc64c6bb030232cde18ff0bf4ea8d357dc7931fb659dc82ebcabb"
+    },
+    {
+      "name": "ElysiumEntryController",
+      "originalArtifactSha256": "2bde8db90417a52e6cfb6237d139860b84a72a64ce3c7ba849a343914ec819bf",
+      "fixtureSha256": "c326ee64d900bf3686cb9389810f8b05fd9fe5b2eb9d52c516ef8ba10369d062"
+    },
+    {
+      "name": "IntegrationToken",
+      "originalArtifactSha256": "409b7fa4c311d5c2b0104f5de543e2ea92e306cfda71bd0313c64c3cc93260af",
+      "fixtureSha256": "222fd5c6474bda217f00f25dd824107b683ce9d00786b1e1a817d891221d22e4"
+    },
+    {
+      "name": "IntegrationPrice",
+      "originalArtifactSha256": "2315f7af00e72113f13bf48700b33bc4311aaf95fe83a4723abfcb4b9f67b483",
+      "fixtureSha256": "27f9c9cc13cbd9d361d45e63ce4dd882b0c66b2d8652359a4eda5a39ebaae95d"
+    },
+    {
+      "name": "IntegrationRebate",
+      "originalArtifactSha256": "a4f2598d055cea2bd2adc35066a12a40a8b92b6ba505f22e877f023b202d7333",
+      "fixtureSha256": "b2ec7fc776ac73867cb2952ae86f5d035c915b18aa71136bf6fb932f08423377"
+    },
+    {
+      "name": "IntegrationReserve",
+      "originalArtifactSha256": "84e989852a901aba50518e4dd951b338614ac2c4b136066ff8cca39cbe582c24",
+      "fixtureSha256": "7604c01292452472c177e755bca4f41e9b14475aa544e24abca1358d9f8405c2"
+    }
+  ]
+}

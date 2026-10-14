@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "elysium-auctions-flat-fee-7006d7889ab293d3",
+  "chainId": 99801,
+  "network": "testnet",
+  "startBlock": "5451974",
+  "curve": {
+    "address": "0x18bf92514c0d749a017aaf69153442703e1a966b",
+    "runtimeCodeHash": "0xb37b6972ce5395b7c2b04707b157de0e2cb7f57e8b312a61b7a2b591a2981d7e"
+  },
+  "registry": {
+    "address": "0x6acc92ba104446facd7aebe113f907b1d0874d0b",
+    "runtimeCodeHash": "0x820422f7ab2d90906b8d14e53988552dd76f3a96cf6df85394007bc4f07d090f"
+  },
+  "quoteToken": {
+    "address": "0xa4ce6e6c719f7fb524230c367948039b078683e4",
+    "runtimeCodeHash": "0x39aacdb7a8321713594376632f885dac463b2a445d211cf182ea0edc4a3e146f",
+    "symbol": "Oxy-USDC",
+    "decimals": 6
+  },
+  "auctionController": "0xeece6d3985e32dcd0d59c8a95b4a2bef745f506d"
+}

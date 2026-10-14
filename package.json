@@ -1,0 +1,73 @@
+{
+  "name": "@oxley/sdk",
+  "version": "0.5.0-next.0",
+  "description": "Public Oxley auction-market discovery, quotes and unsigned swap calldata",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/greenpeez/oxley-sdk.git"
+  },
+  "homepage": "https://github.com/greenpeez/oxley-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/greenpeez/oxley-sdk/issues"
+  },
+  "keywords": ["oxley", "elysium", "usdc", "dex", "aggregator", "0x"],
+  "packageManager": "pnpm@10.32.1",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./abis": {
+      "types": "./dist/abis.d.ts",
+      "import": "./dist/abis.js"
+    },
+    "./0x": {
+      "types": "./dist/zero-ex.d.ts",
+      "import": "./dist/zero-ex.js"
+    },
+    "./abis/curve.json": "./abis/ElysiumReserveCurveVNext.json",
+    "./abis/registry.json": "./abis/ElysiumDealRegistry.json",
+    "./deployments/elysium-testnet.json": "./deployments/elysium-testnet.json",
+    "./deployments/mainnet.template.json": "./deployments/mainnet.template.json"
+  },
+  "files": [
+    "dist",
+    "abis",
+    "deployments",
+    "docs",
+    "examples",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org",
+    "tag": "next"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:evm": "node --import tsx --test test/integration/*.test.ts",
+    "test:package": "node scripts/check-package.mjs",
+    "bundle": "node scripts/bundle.mjs",
+    "build:test-executor": "node scripts/build-executor-fixture.mjs",
+    "test:live": "node --import tsx scripts/check-testnet.ts",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "viem": "2.55.5"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "solc": "0.8.34",
+    "tsx": "4.21.0",
+    "typescript": "6.0.3"
+  }
+}

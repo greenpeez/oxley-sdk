@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "REPLACE_WITH_OXLEY_MAINNET_RELEASE_ID",
+  "chainId": null,
+  "network": "mainnet",
+  "startBlock": null,
+  "curve": { "address": null, "runtimeCodeHash": null },
+  "registry": { "address": null, "runtimeCodeHash": null },
+  "quoteToken": { "address": null, "runtimeCodeHash": null, "symbol": "USDC", "decimals": 6 },
+  "auctionController": null
+}
