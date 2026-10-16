@@ -10,20 +10,37 @@ accessor, or Uniswap v4 hook. Providers keep their usual funding,
 transaction submission and final-recipient settlement. Fees are enforced by the
 contracts even when the SDK is bypassed.
 
-This repository contains the **Elysium SDK**, version `0.5.0-next.1`, as ESM with
+This repository contains the **Elysium SDK**, version `0.5.0-next.2`, as ESM with
 TypeScript declarations. It is a different API from the legacy `@oxley/sdk`
 `0.4.1` release. The legacy `latest` channel is left unchanged; this release is
 designated for `next`. It is not a drop-in upgrade for `@oxley/sdk/release` or
 `@oxley/sdk/evm` consumers.
 
-Install the Elysium SDK preview, including its public data client:
+Install the Elysium SDK preview, including auction transactions and public data:
 
 ```sh
-npm install @oxley/sdk@0.5.0-next.1
+npm install @oxley/sdk@0.5.0-next.2
 ```
 
 Version `0.5.0-next.0` provides trading integration, not the data client.
 Mainnet bindings remain pending; the included manifest and public feeds are testnet only.
+
+## Auction Transactions
+
+`@oxley/sdk/auctions` adds `createOxleyAuctionClient`, unsigned bid/claim/refund
+builders, exact fee-inclusive approvals, and typed auction ABIs. The client checks
+runtime pins and the controller/router/adapter/auction bindings using your RPC.
+It never signs, submits transactions, invents exit hints, or redirects payouts.
+
+- Bids target the accepted-bid router, not the auction controller or raw CCA entry.
+- Refund/exit and token-claim transactions target the auction resolved on-chain.
+- Partial-fill exits require explicit CCA checkpoint hints; confirm an exit before claiming.
+- The transaction caller owns a new bid. Refunds and claims always pay the recorded bid owner.
+
+See [auction integration](docs/auctions.md), [example](examples/auction.ts), and
+[auction validation](docs/auction-validation.md). Full compiler ABI JSON exports:
+`@oxley/sdk/abis/auction-controller.json`, `auction-bid-router.json`,
+`auction-adapter.json`, and `cca-auction.json` (all under `@oxley/sdk/abis/`).
 
 ## Indexed Data
 

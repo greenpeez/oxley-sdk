@@ -7,5 +7,10 @@
   "curve": { "address": null, "runtimeCodeHash": null },
   "registry": { "address": null, "runtimeCodeHash": null },
   "quoteToken": { "address": null, "runtimeCodeHash": null, "symbol": "USDC", "decimals": 6 },
-  "auctionController": null
+  "auctionController": null,
+  "auctionBindings": {
+    "controllerRuntimeCodeHash": null,
+    "bidRouter": { "address": null, "runtimeCodeHash": null },
+    "adapter": { "address": null, "runtimeCodeHash": null }
+  }
 }

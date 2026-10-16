@@ -14,6 +14,8 @@ assert.ok(pack.files.some(file => file.path === "dist/index.js"));
 assert.ok(pack.files.some(file => file.path === "dist/index.d.ts"));
 assert.ok(pack.files.some(file => file.path === "dist/data.d.ts"));
 assert.ok(pack.files.some(file => file.path === "docs/data-api.md"));
+assert.ok(pack.files.some(file => file.path === "dist/auctions.d.ts"));
+assert.ok(pack.files.some(file => file.path === "docs/auctions.md"));
 for (const file of pack.files) {
   assert.ok(/^(dist\/|abis\/|docs\/|deployments\/|examples\/|README\.md$|LICENSE$|package\.json$)/.test(file.path), file.path);
   assert.ok(!/(\.env|node_modules|test\/|fixtures|\.log$|private.key)/i.test(file.path), file.path);
@@ -29,6 +31,11 @@ try {
     import { curveAbi } from '@oxley/sdk/abis';
     import { buildZeroExBasic } from '@oxley/sdk/0x';
     import { createOxleyDataClient, isCurrentData } from '@oxley/sdk/data';
+    import { createOxleyAuctionClient, buildAuctionClaim, buildAuctionRefund } from '@oxley/sdk/auctions';
+    import controllerAbi from '@oxley/sdk/abis/auction-controller.json' with { type: 'json' };
+    import bidRouterAbi from '@oxley/sdk/abis/auction-bid-router.json' with { type: 'json' };
+    import adapterAbi from '@oxley/sdk/abis/auction-adapter.json' with { type: 'json' };
+    import ccaAbi from '@oxley/sdk/abis/cca-auction.json' with { type: 'json' };
     import deployment from '@oxley/sdk/deployments/elysium-testnet.json' with { type: 'json' };
     import abi from '@oxley/sdk/abis/curve.json' with { type: 'json' };
     assert.equal(parseDeployment(deployment).chainId, 99801);
@@ -36,17 +43,23 @@ try {
     assert.ok(curveAbi.length && abi.length && createOxleyClient && buildZeroExBasic);
     assert.ok(createOxleyDataClient({ baseUrl: 'https://example.com/api/data/v1', chainId: 99801 }).candles);
     assert.equal(isCurrentData({ checkedAt: 0, freshness: 'fresh' }), false);
+    assert.ok(createOxleyAuctionClient && buildAuctionClaim && buildAuctionRefund);
+    assert.ok(controllerAbi.length && bidRouterAbi.length && adapterAbi.length && ccaAbi.length);
   `);
   execFileSync(process.execPath, ["consumer.mjs"], { cwd: directory, stdio: "pipe" });
   writeFileSync(join(directory, "consumer.ts"), `
     import { createOxleyClient, type QuoteRequest, type Swap } from '@oxley/sdk';
     import { buildZeroExBasic } from '@oxley/sdk/0x';
     import { createOxleyDataClient, type IndexedData, type IndexedTrade } from '@oxley/sdk/data';
+    import { createOxleyAuctionClient, type AuctionBidInput } from '@oxley/sdk/auctions';
     import { createPublicClient, http } from 'viem';
     export const client = (deployment: unknown) => createOxleyClient({ deployment,
       publicClient: createPublicClient({ transport: http('http://localhost:8545') }) });
     export const encode = (swap: Swap) => buildZeroExBasic(swap);
     export type Input = QuoteRequest;
+    export const auctions = (deployment: unknown) => createOxleyAuctionClient({ deployment,
+      publicClient: createPublicClient({ transport: http('http://localhost:8545') }) });
+    export type AuctionInput = AuctionBidInput;
     export const data = createOxleyDataClient({ baseUrl: 'https://example.com/api/data/v1', chainId: 99801 });
     export const trades: (id: \`0x\${string}\`) => Promise<IndexedData<IndexedTrade>> =
       dealId => data.trades({ dealId, from: 100, to: 200 });

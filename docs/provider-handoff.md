@@ -8,8 +8,10 @@ Solidity interface are sufficient for a provider's own integration.
 
 | Material | Included location |
 | --- | --- |
-| Installable JavaScript and TypeScript types | `@oxley/sdk@0.5.0-next.1`, on the `next` release line |
+| Installable JavaScript and TypeScript types | `@oxley/sdk@0.5.0-next.2`, on the `next` release line |
 | Full curve and registry ABI JSON | `abis/` |
+| Auction controller, bid router, adapter and CCA ABI JSON | `abis/`, see [auction guide](auctions.md) |
+| Unsigned bid, claim and full/partial refund helpers | `@oxley/sdk/auctions`, `examples/auction.ts` |
 | Minimal Solidity integration interface | `docs/IOxleyCurve.sol` |
 | Network, token, addresses and runtime pins | `deployments/elysium-testnet.json` |
 | Quote, approvals and calldata usage | `README.md`, `examples/` |
@@ -72,3 +74,14 @@ Use `https://app.oxley.fun/api/data/v1` with chain ID `99801` and `model: 'cca'`
 The current feeds are Elysium testnet/Oxy-USDC, without an API key or wallet.
 This display-data integration is distinct from aggregator execution or exchange
 token-listing, deposit/withdrawal, custody and confirmation-policy integrations.
+
+## Auction Participation
+
+Version `0.5.0-next.2` adds runtime-verified auction transaction preparation.
+Bids approve and call the fee-aware bid router. Token claims and principal refunds
+call the actual CCA auction, not its launch controller. Partial fills use explicit
+checkpoint hints. All outputs are unsigned; providers retain signing and submission.
+An executor submitting a bid becomes its owner, unlike swaps where a provider can
+forward an immediately received output. See [auction integration](auctions.md)
+before composing a bid through a shared executor. This is not an instant-settlement
+DEX route and does not introduce custody, deposit or withdrawal services.

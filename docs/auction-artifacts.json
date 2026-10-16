@@ -1,0 +1,29 @@
+{
+  "releaseId": "elysium-auctions-flat-fee-7006d7889ab293d3",
+  "evidence": [
+    {
+      "name": "ElysiumBondedCcaLaunchControllerVNext",
+      "originalArtifactSha256": "80978152b53f3f7b55b4461ac6abe4fb20e4e0544cbc34ca20cb31cf87eaef8a",
+      "abiSha256": "419bfe9c8b822d8d48382f0dac12b4a41b84e84298e3ddbf3acb61a5c08d4a53",
+      "fixtureSha256": "41d5bd9c892202b12e29554c222ac99e49322b45b04d995e4797da608f182773"
+    },
+    {
+      "name": "ElysiumCcaBidRouterVNext",
+      "originalArtifactSha256": "cc805b58f63bb319318c038daaadee8b898139838bf9e66921463f8e07af6a16",
+      "abiSha256": "c31471e9f79ec37a18944127a439523daf9e8ef9fd884ddf65c413e5cc56e9e6",
+      "fixtureSha256": "5835fd4353daf5ba969464279147fe7f41b433dc70b491470c3c1aeec7bf984f"
+    },
+    {
+      "name": "ElysiumUniswapCcaAdapter",
+      "originalArtifactSha256": "d8ad283e89d4d8852210512b5f6ad9072fb687e7cd76f842a25c9fa4aacd4a09",
+      "abiSha256": "4cb1e18469d2a5610e2baa2aa648345d2f8324639c7683d0dde44eaa865af168",
+      "fixtureSha256": "b3d1b48950d7ceed82c728bf134352e05efb260d1f795aa7118e0d8a723a3713"
+    },
+    {
+      "name": "ContinuousClearingAuction",
+      "originalArtifactSha256": "8d6e125546ac976c6fcd2003f458906f4742c6dfd5794fdc84d24aec37d3f0ef",
+      "abiSha256": "c4a78d52ed0229d61abbc6d1bc1d68bdd7ecbd493f5b072ec966735451519b71",
+      "fixtureSha256": "a7182e6798079f4ee42a55aa14ec46addc1aae0ace6bb81ec83cdd2f02e5c17d"
+    }
+  ]
+}

@@ -18,5 +18,16 @@
     "symbol": "Oxy-USDC",
     "decimals": 6
   },
-  "auctionController": "0xeece6d3985e32dcd0d59c8a95b4a2bef745f506d"
+  "auctionController": "0xeece6d3985e32dcd0d59c8a95b4a2bef745f506d",
+  "auctionBindings": {
+    "controllerRuntimeCodeHash": "0x9759c2f04de0b21c4826bdaefc05b4e906f0f42f8f26bbbc6c6a4d9bcc71b5b3",
+    "bidRouter": {
+      "address": "0x9b747241f81657080f9966f24924f97f58519733",
+      "runtimeCodeHash": "0xbfb4f6f3d827b2cce9e561ba4586201ba215325712c43dd825a011826ab87362"
+    },
+    "adapter": {
+      "address": "0xd124bbaab46af3bcd7735b7c62a0f77aa349e5b1",
+      "runtimeCodeHash": "0x6d455d42d2aa86479d37e7ba85b549fcae870a2f1e71c6c0973f58509469b6b8"
+    }
+  }
 }

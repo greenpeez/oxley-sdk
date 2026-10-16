@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.0-next.2 - 2026-10-16
+
+- Full controller, fee-aware bid router, adapter and CCA auction ABI JSON exports.
+- Separate `/auctions` module with unsigned bid, token-claim and full/partial refund builders.
+- Runtime/binding verification, on-chain bid fees, exact quote-token approvals and simulations.
+- Explicit original-owner payouts, checkpoint hints and claim-after-exit workflow.
+- Auction unit/ABI tests, real-bytecode local execution tests, and read-only testnet verification.
+- Pin the existing data freshness test clock to remove timing-dependent boundary failures.
+
+No contract or application deployment, funded test, or change to npm `latest`.
+Mainnet bindings remain pending; the new helpers do not support older auction releases.
+
+## 0.5.0-next.1 - 2026-10-16
+
+- Public indexed data client, eight data resources, freshness checks and builder documentation.
+
 ## 0.5.0-next.0 - 2026-10-14
 
 Initial standalone Elysium integration release for aggregators and exchanges.

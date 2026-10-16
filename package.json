@@ -1,7 +1,7 @@
 {
   "name": "@oxley/sdk",
-  "version": "0.5.0-next.1",
-  "description": "Oxley indexed market data, auction discovery, quotes and unsigned swap calldata",
+  "version": "0.5.0-next.2",
+  "description": "Oxley market data, quotes, swaps and unsigned auction bid, claim and refund transactions",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -35,6 +35,14 @@
       "types": "./dist/data.d.ts",
       "import": "./dist/data.js"
     },
+    "./auctions": {
+      "types": "./dist/auctions.d.ts",
+      "import": "./dist/auctions.js"
+    },
+    "./abis/auction-controller.json": "./abis/ElysiumBondedCcaLaunchControllerVNext.json",
+    "./abis/auction-bid-router.json": "./abis/ElysiumCcaBidRouterVNext.json",
+    "./abis/auction-adapter.json": "./abis/ElysiumUniswapCcaAdapter.json",
+    "./abis/cca-auction.json": "./abis/ContinuousClearingAuction.json",
     "./abis/curve.json": "./abis/ElysiumReserveCurveVNext.json",
     "./abis/registry.json": "./abis/ElysiumDealRegistry.json",
     "./deployments/elysium-testnet.json": "./deployments/elysium-testnet.json",
@@ -63,6 +71,7 @@
     "bundle": "node scripts/bundle.mjs",
     "build:test-executor": "node scripts/build-executor-fixture.mjs",
     "test:live": "node --import tsx scripts/check-testnet.ts",
+    "test:live:auctions": "node --import tsx scripts/check-auctions-testnet.ts",
     "prepack": "npm run build"
   },
   "dependencies": {

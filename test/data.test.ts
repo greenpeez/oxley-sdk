@@ -64,7 +64,8 @@ test("data client preserves opaque cursors and empty pages with more results", a
   assert.equal(page.hasMore, true); assert.deepEqual(page.items, []); assert.equal(page.nextCursor, cursor);
 });
 
-test("data client distinguishes delayed prefixes from expired observations", async () => {
+test("data client distinguishes delayed prefixes from expired observations", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: now * 1000 });
   const delayed = wire("markets", [], { freshness: "stale", readState: "complete-prefix", finalizedBlock: "110", lagBlocks: "10" });
   const page = await client(async () => Response.json(delayed)).markets();
   assert.equal(isCurrentData(page), false);
