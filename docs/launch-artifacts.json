@@ -1,0 +1,18 @@
+{
+  "releaseId": "elysium-auctions-flat-fee-7006d7889ab293d3",
+  "evidence": [
+    {
+      "name": "ElysiumCreatorAccountFactory",
+      "originalArtifactSha256": "4577334ff3df85cbe209ca997190a8fd3293c6a7894f813ee9de723b3501bbfa",
+      "abiSha256": "d861279cc4912aa7fa6cc080ca404deef6ad4add4d828efae2427b2cd0bde0d7",
+      "fixtureSha256": "0167bd53d6b3eda85a507cc753fcb24587c58ccda032e0fbf227ec0907fc6099"
+    },
+    {
+      "name": "ElysiumCreatorAccount",
+      "originalArtifactSha256": "a4e4d0d768b17f21316a3ae32fb2159b5257d840783229635306386c5a4e9497",
+      "abiSha256": "33fb3faa5e5fbc2f25151310e7e8b2bb8364a54923e60974f1073b28458be1a9",
+      "fixtureSha256": "775e663ce3f9a1c928958d01c0d90824346a5fddc309508e20aec5c4a3d2b188"
+    }
+  ],
+  "graphFixtureSha256": "ed9d29b2d870c8c4174f6f56a0a45cabcc879d9fe0081d0c812cfd6f12128ed3"
+}

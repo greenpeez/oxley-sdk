@@ -19,6 +19,22 @@
     "decimals": 6
   },
   "auctionController": "0xeece6d3985e32dcd0d59c8a95b4a2bef745f506d",
+  "launchBindings": {
+    "creatorAccountFactory": {
+      "address": "0x1d2da15246f5cb5016f49da0140456a696bd60a4",
+      "runtimeCodeHash": "0xe5af5a607ac6b1714c3b4ac01d0bdfa1388fdc56ccea8e9b29c7e4cf0116daf0"
+    },
+    "entryController": {
+      "address": "0xf3383c2aaa3e024c6bd65f4243c7ddf30f592531",
+      "runtimeCodeHash": "0x3aade113b66884cd6290b0f648c2b00bb211444e178a9279d712ecb9d8b1831d"
+    },
+    "bondEscrow": {
+      "address": "0xe5a2d6575c63bcf43b044ba6da509bd8d1dd9c60",
+      "runtimeCodeHash": "0xf4566bdf821697eb15a1d292fb8608f8ab96819bcd06ca745b23cff674ea46b8"
+    },
+    "launchFeeBaseUnits": "1500000",
+    "deployerBondWei": "500000000000000000"
+  },
   "auctionBindings": {
     "controllerRuntimeCodeHash": "0x9759c2f04de0b21c4826bdaefc05b4e906f0f42f8f26bbbc6c6a4d9bcc71b5b3",
     "bidRouter": {

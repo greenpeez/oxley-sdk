@@ -30,6 +30,14 @@ auction bindings. The trading template alone does not supply these extra pins.
 See [auction integration](auctions.md). Mainnet auction execution needs its own
 acceptance checks; funded swap tests do not prove bid/refund/claim behavior there.
 
+Auction creation additionally requires `launchBindings.creatorAccountFactory`,
+`entryController` and `bondEscrow`, each with `address` and `runtimeCodeHash`, plus
+decimal-string `launchFeeBaseUnits` and `deployerBondWei`. `parseLaunchDeployment`
+rejects placeholders; the launch client verifies graph bindings, actual fee/bond,
+account ownership and public launch status. The supported controller's bond is
+0.5 native units. A changed launch interface or bond policy requires a reviewed
+SDK update, not a guessed configuration. See [launch integration](launch.md).
+
 Indexed data requires an explicitly enabled mainnet API deployment and approved
 mainnet indexer, chain, release and USDC bindings. The existing public API serves
 testnet only; changing a frontend's `chainId` cannot switch its data source to
@@ -48,4 +56,6 @@ rewrite is necessary for basic routing. If a later contract release changes an
 ABI or economic behavior, give it a new SDK/deployment compatibility version.
 
 Native HYPE remains operating gas paid by the relevant transaction submitter.
+Auction creators also fund the existing native operating bond, with unused-bond
+ownership and return rules preserved.
 It is not an alternative bid/trade payment asset or an SDK sponsorship budget.

@@ -1,6 +1,6 @@
 # Public Indexed Data API
 
-Release: `@oxley/sdk@0.5.0-next.3`, exported from `@oxley/sdk/data` (introduced in `0.5.0-next.1`; runtime unchanged from `0.5.0-next.2`).
+Release: `@oxley/sdk@0.5.0-next.4`, exported from `@oxley/sdk/data` (introduced in `0.5.0-next.1`; data-client runtime unchanged from `0.5.0-next.2`).
 Public API root: `https://app.oxley.fun/api/data/v1`.
 Network: Elysium testnet, chain `99801`, Oxy-USDC. Mainnet is not enabled.
 Version `0.5.0-next.0` does not export `/data`. The current Elysium SDK is the

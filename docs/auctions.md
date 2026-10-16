@@ -1,7 +1,7 @@
 # Auction Transactions
 
 Available since `@oxley/sdk@0.5.0-next.2` via `@oxley/sdk/auctions`; current
-`0.5.0-next.3` changes documentation only. ESM, Node 20+,
+`0.5.0-next.4` also adds the separate [auction launch module](launch.md). ESM, Node 20+,
 TypeScript and browser-compatible. No Oxley backend, API key or signer is required;
 supply a viem public client with sufficient RPC capacity. The module only reads
 chain state, simulates calls and returns unsigned transactions.
@@ -117,8 +117,9 @@ bids and must implement its own custody/accounting; the SDK cannot infer end use
 addresses, integer widths and identities, but do **not** establish deployment trust,
 auction readiness, ownership, balances, allowances or valid tick/checkpoint hints.
 Use the verified client by default. All bid/claim/refund transactions have `value: 0n`.
-No native-asset bid or refund route, contract deployment, creator-bond withdrawal,
-launch helper, generic recipient override or signing key is added here.
+No native-asset bid or refund route, creator-bond withdrawal, generic recipient
+override or signing key is added here. Creator-account setup and auction launch
+helpers are available separately from `@oxley/sdk/launch`.
 
 ## Mainnet
 

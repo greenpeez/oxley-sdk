@@ -12,10 +12,11 @@ Public links: [GitHub](https://github.com/greenpeez/oxley-sdk),
 
 | Material | Included location |
 | --- | --- |
-| Installable JavaScript and TypeScript types | `@oxley/sdk@0.5.0-next.3`, the default `latest` release; documentation-only update to `0.5.0-next.2` |
+| Installable JavaScript and TypeScript types | `@oxley/sdk@0.5.0-next.4`, the default `latest` release |
 | Full curve and registry ABI JSON | `abis/` |
 | Auction controller, bid router, adapter and CCA ABI JSON | `abis/`, see [auction guide](auctions.md) |
 | Unsigned bid, claim and full/partial refund helpers | `@oxley/sdk/auctions`, `examples/auction.ts` |
+| Verified auction launch steps and creator-account ABIs | `@oxley/sdk/launch`, `docs/launch.md`, `examples/launch.ts` |
 | Minimal Solidity integration interface | `docs/IOxleyCurve.sol` |
 | Network, token, addresses and runtime pins | `deployments/elysium-testnet.json` |
 | Quote, approvals and calldata usage | `README.md`, `examples/` |
@@ -106,3 +107,11 @@ An executor submitting a bid becomes its owner, unlike swaps where a provider ca
 forward an immediately received output. See [auction integration](auctions.md)
 before composing a bid through a shared executor. This is not an instant-settlement
 DEX route and does not introduce custody, deposit or withdrawal services.
+
+## Auction Creation
+
+Builders and authorized agents can use `@oxley/sdk/launch` to prepare creator-account
+setup, exact launch-fee approval and auction launch with the existing operating
+bond. They provide their own wallet and durable submission/recovery flow. See
+[launch integration](launch.md); off-chain editable metadata is separate. Mainnet
+launch support still requires the final reviewed `launchBindings` and USDC graph.

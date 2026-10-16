@@ -8,6 +8,13 @@
   "registry": { "address": null, "runtimeCodeHash": null },
   "quoteToken": { "address": null, "runtimeCodeHash": null, "symbol": "USDC", "decimals": 6 },
   "auctionController": null,
+  "launchBindings": {
+    "creatorAccountFactory": { "address": null, "runtimeCodeHash": null },
+    "entryController": { "address": null, "runtimeCodeHash": null },
+    "bondEscrow": { "address": null, "runtimeCodeHash": null },
+    "launchFeeBaseUnits": null,
+    "deployerBondWei": null
+  },
   "auctionBindings": {
     "controllerRuntimeCodeHash": null,
     "bidRouter": { "address": null, "runtimeCodeHash": null },

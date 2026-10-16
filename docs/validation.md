@@ -5,6 +5,10 @@ surface, not whole-repository acceptance or a new contract security audit.
 
 ## Current Evidence
 
+- [Auction launch validation](launch-validation.md): `0.5.0-next.4` adds unsigned
+  launch preparation, creator-account ABIs and restart recovery. All 40 unit
+  tests and 17 local EVM tests pass; read-only testnet checks verify launch pins,
+  costs, gas-price cap and floor calculations. No remote funded launch was sent.
 - [Funded testnet buy and sell](funded-swaps-2026-10-16.md): completed through
   the deployed application using the SDK's independent RPC quotes and locally
   computed 1% minimums. Successful receipts, exact outputs, historical balances,
@@ -13,10 +17,10 @@ surface, not whole-repository acceptance or a new contract security audit.
   bid/refund/claim tests and read-only testnet graph/fee checks.
 - [Indexed data validation](data-validation.md): public API checks across all
   eight resources, browser CORS and indexed-feed boundaries.
-- `0.5.0-next.3` is a documentation-only release. Runtime, ABIs, deployment
-  profiles and dependencies remain those of `0.5.0-next.2`.
+- The preceding `0.5.0-next.3` was a documentation-only release. Its runtime,
+  ABIs, deployment profiles and dependencies remained those of `0.5.0-next.2`.
 
-Documentation-release checks on October 16: TypeScript checks passed, all 32 SDK
+For that preceding documentation-only release on October 16: TypeScript checks passed, all 32 SDK
 unit/ABI tests passed, the ESM/declaration build passed, and a clean consumer
 installed the actual archive and verified imports, types and the file allowlist.
 The public docs content/search suite passed all 17 tests. No new funded action

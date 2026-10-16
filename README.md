@@ -10,7 +10,7 @@ accessor, or Uniswap v4 hook. Providers keep their usual funding,
 transaction submission and final-recipient settlement. Fees are enforced by the
 contracts even when the SDK is bypassed.
 
-This repository contains the **Elysium SDK**, version `0.5.0-next.3`, as ESM with
+This repository contains the **Elysium SDK**, version `0.5.0-next.4`, as ESM with
 TypeScript declarations. It is a different API from the legacy `@oxley/sdk`
 `0.4.1` release. The Elysium release is the default `latest` channel. Its
 prerelease version does not imply mainnet readiness. It is not a drop-in upgrade
@@ -24,8 +24,9 @@ npm install @oxley/sdk
 ```
 
 The `/data` module was introduced in `0.5.0-next.1`; `/auctions` in
-`0.5.0-next.2`. Version `0.5.0-next.3` updates documentation only; its runtime,
-ABIs, deployment profiles and dependencies are unchanged from `0.5.0-next.2`.
+`0.5.0-next.2`. Version `0.5.0-next.4` adds `/launch`: verified auction launch
+preparation, creator-account ABIs, exact launch-fee approvals and resumable stages.
+Existing swap, data and bid/claim/refund APIs remain unchanged.
 Mainnet bindings remain pending; the included manifest and public feeds are testnet only.
 
 ## Start Here
@@ -34,7 +35,8 @@ Mainnet bindings remain pending; the included manifest and public feeds are test
 - Aggregators and exchanges: [provider handoff](docs/provider-handoff.md), [0x source guide](docs/0x.md), [mainnet requirements](docs/mainnet.md).
 - Frontend builders: [indexed data API](docs/data-api.md) and [polling example](examples/live-data.ts).
 - Auction participation: [bid, claim and refund guide](docs/auctions.md) and [example](examples/auction.ts).
-- Evidence: [validation overview](docs/validation.md), [funded buy/sell results](docs/funded-swaps-2026-10-16.md), [auction tests](docs/auction-validation.md), [live data checks](docs/data-validation.md).
+- Builders and AI agents launching auctions: [launch guide](docs/launch.md) and [example](examples/launch.ts).
+- Evidence: [validation overview](docs/validation.md), [launch tests](docs/launch-validation.md), [funded buy/sell results](docs/funded-swaps-2026-10-16.md), [auction tests](docs/auction-validation.md), [live data checks](docs/data-validation.md).
 
 ## Release Channel
 
@@ -50,6 +52,21 @@ npm view @oxley/sdk version dist-tags
 Published version archives are immutable; older archives may still describe the
 release channel that applied when they were published. The registry's current
 dist-tags determine the default version.
+
+## Auction Launches
+
+`@oxley/sdk/launch` provides `createOxleyLaunchClient`, `quoteAuctionFloor`,
+`buildCreatorAccount` and `buildAuctionLaunch`. `prepareLaunch(intent)` returns
+one simulated unsigned step: setup, allowance reset, exact fee approval, launch,
+or an already-completed result. Confirm each receipt and prepare again using the
+same persisted deal ID. `getLaunch({owner,dealId})` supports restart recovery.
+
+Launches use the verified creator-account factory and account. The creator pays
+the 1.5 Oxy-USDC testnet fee plus a separate 0.5 HYPE operating bond and gas;
+no sponsorship or native-asset bid/trade route is added. Wallet authorization,
+submission and durable transaction tracking remain with the builder or agent.
+Off-chain editable metadata is a separate workflow, not published by this module.
+See [launch terms, units, checks and recovery](docs/launch.md).
 
 ## Auction Transactions
 
@@ -179,8 +196,9 @@ Serialize bigint values as decimal strings at JSON boundaries.
   the configured USDC quote asset. Auction bids, principal refunds and token
   claims are prepared by the separate `/auctions` client; they are not atomic
   swap routes. The `/data` client is read-only. No SDK client signs or broadcasts.
-- Auction launches, bridge transfers, mint/twin markets, native-asset payments
-  and exact-output trading are outside the public package's current scope.
+- Auction launches use the separate `/launch` client and creator-funded native
+  operating bond. Bridge transfers, mint/twin markets, native-asset bid/trade
+  payments and exact-output trading remain outside the package's scope.
 - A market is identified by `(chainId, curve, marketId)`. Do not assume token
   symbols are identities or pick the first matching token across deployments.
 - Native on-chain reads are `quoteBuy(id,amount,caller)` and
@@ -214,7 +232,7 @@ deployment, not the economic authenticity of an arbitrary user-supplied manifest
 Oxley must supply the reviewed mainnet manifest. For proxy tokens such as USDC,
 the proxy runtime hash is not proof that its implementation can never change.
 
-The client verifies immutable contract pins on first use and on explicit
+The trading client verifies immutable contract pins on first use and on explicit
 `verifyDeployment()`. Each operation checks the RPC chain and reads a single
 numbered block with a final hash check. A reorg causes rejection; persist and
 rewind discovery cursors to the last canonical checkpoint. Consumers choose

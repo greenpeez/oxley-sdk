@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "noEmit": true, "rootDir": ".", "types": ["node"], "allowImportingTsExtensions": true,
-    "paths": { "@oxley/sdk": ["./src/index.ts"], "@oxley/sdk/0x": ["./src/zero-ex.ts"], "@oxley/sdk/data": ["./src/data.ts"], "@oxley/sdk/auctions": ["./src/auctions.ts"] } },
+    "paths": { "@oxley/sdk": ["./src/index.ts"], "@oxley/sdk/0x": ["./src/zero-ex.ts"], "@oxley/sdk/data": ["./src/data.ts"], "@oxley/sdk/auctions": ["./src/auctions.ts"], "@oxley/sdk/launch": ["./src/launch.ts"] } },
   "include": ["src/**/*.ts", "test/**/*.ts", "examples/**/*.ts", "scripts/**/*.ts"]
 }
