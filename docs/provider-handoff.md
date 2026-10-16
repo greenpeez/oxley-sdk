@@ -8,7 +8,7 @@ Solidity interface are sufficient for a provider's own integration.
 
 | Material | Included location |
 | --- | --- |
-| Installable JavaScript and TypeScript types | `oxley-sdk-0.5.0-next.0.tgz`, package `@oxley/sdk` on the `next` release line |
+| Installable JavaScript and TypeScript types | `@oxley/sdk@0.5.0-next.1`, on the `next` release line |
 | Full curve and registry ABI JSON | `abis/` |
 | Minimal Solidity integration interface | `docs/IOxleyCurve.sol` |
 | Network, token, addresses and runtime pins | `deployments/elysium-testnet.json` |
@@ -62,3 +62,13 @@ verification links, deployment block and at least one active market when Elysium
 mainnet is available. The provider installs its normal DEX source integration and
 enables it in its routing engine. Those operational steps cannot be completed by
 shipping an SDK alone. No provider-specific contract extension is requested.
+
+## Frontend Data Builders
+
+The separate `@oxley/sdk/data` client in `0.5.0-next.1` covers indexed auctions,
+wallet bids for a specified auction, recent auction events, trades, volume and candles.
+See [the data API guide](data-api.md) and [polling example](../examples/live-data.ts).
+Use `https://app.oxley.fun/api/data/v1` with chain ID `99801` and `model: 'cca'`.
+The current feeds are Elysium testnet/Oxy-USDC, without an API key or wallet.
+This display-data integration is distinct from aggregator execution or exchange
+token-listing, deposit/withdrawal, custody and confirmation-policy integrations.

@@ -1,7 +1,7 @@
 {
   "name": "@oxley/sdk",
-  "version": "0.5.0-next.0",
-  "description": "Public Oxley auction-market discovery, quotes and unsigned swap calldata",
+  "version": "0.5.0-next.1",
+  "description": "Oxley indexed market data, auction discovery, quotes and unsigned swap calldata",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -30,6 +30,10 @@
     "./0x": {
       "types": "./dist/zero-ex.d.ts",
       "import": "./dist/zero-ex.js"
+    },
+    "./data": {
+      "types": "./dist/data.d.ts",
+      "import": "./dist/data.js"
     },
     "./abis/curve.json": "./abis/ElysiumReserveCurveVNext.json",
     "./abis/registry.json": "./abis/ElysiumDealRegistry.json",

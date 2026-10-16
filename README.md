@@ -1,30 +1,51 @@
 # Oxley SDK
 
-Public, provider-neutral TypeScript SDK for **active post-auction Oxley markets**.
-It discovers markets from chain events, reads executable exact-input quotes and
+Public, provider-neutral TypeScript SDK for Oxley. The trading client discovers
+active post-auction markets from chain events, reads executable exact-input quotes and
 builds unsigned ERC-20 approvals and atomic buy/sell calldata. It runs in Node.js
 and browser applications using a caller-supplied viem public client.
 
-No Oxley API key, backend, signer, callback, provider allowlist, custom taker
-accessor, or Uniswap v4 hook is required. Providers keep their usual funding,
+The trading client needs no Oxley API key, backend, signer, callback, provider allowlist, custom taker
+accessor, or Uniswap v4 hook. Providers keep their usual funding,
 transaction submission and final-recipient settlement. Fees are enforced by the
 contracts even when the SDK is bypassed.
 
-This repository contains the **Elysium SDK**, version `0.5.0-next.0`, as ESM with
+This repository contains the **Elysium SDK**, version `0.5.0-next.1`, as ESM with
 TypeScript declarations. It is a different API from the legacy `@oxley/sdk`
 `0.4.1` release. The legacy `latest` channel is left unchanged; this release is
 designated for `next`. It is not a drop-in upgrade for `@oxley/sdk/release` or
 `@oxley/sdk/evm` consumers.
 
-Install the archive from [GitHub Releases](https://github.com/greenpeez/oxley-sdk/releases):
+Install the Elysium SDK preview, including its public data client:
 
 ```sh
-npm install ./oxley-sdk-0.5.0-next.0.tgz
+npm install @oxley/sdk@0.5.0-next.1
 ```
 
-After npm publication, the equivalent pinned registry install is
-`npm install @oxley/sdk@0.5.0-next.0`. Check the release notes for publication
-status. Mainnet bindings remain pending; the included manifest is testnet only.
+Version `0.5.0-next.0` provides trading integration, not the data client.
+Mainnet bindings remain pending; the included manifest and public feeds are testnet only.
+
+## Indexed Data
+
+`@oxley/sdk/data` is a separate, fetch-only browser/Node client for public indexed
+auctions, bids, activity, trade history, exact volume and chart candles. No wallet
+or RPC client is needed. It requires the deployed public data API, not an RPC URL.
+
+```ts
+import { createOxleyDataClient, isCurrentData } from '@oxley/sdk/data';
+
+const data = createOxleyDataClient({
+  baseUrl: 'https://app.oxley.fun/api/data/v1',
+  chainId: 99801,
+});
+const auctions = await data.auctions({ model: 'cca', limit: 20 });
+if (isCurrentData(auctions)) console.log(auctions.items);
+```
+
+See the [public data API guide](docs/data-api.md) for every endpoint, model
+selection, numeric units, pagination, freshness, polling and release limitations.
+The [frontend example](examples/live-data.ts) handles cancellation and cooldowns.
+These feeds are for display, **not transaction preparation or signing authority**.
 
 ## Quote And Prepare
 
@@ -96,8 +117,9 @@ Serialize bigint values as decimal strings at JSON boundaries.
 ## Integration Semantics
 
 - Only active registered auction markets against the configured USDC quote asset
-  are exposed. Auction bids, delayed claims, bridges, mint/twin markets, native
-  payments and exact-output trading are outside this package.
+  are exposed by the trading client. Bid submission, delayed claims, bridges,
+  mint/twin markets, native payments and exact-output trading are outside this
+  package. The separate data client reads indexed bids; it never submits them.
 - A market is identified by `(chainId, curve, marketId)`. Do not assume token
   symbols are identities or pick the first matching token across deployments.
 - Native on-chain reads are `quoteBuy(id,amount,caller)` and
