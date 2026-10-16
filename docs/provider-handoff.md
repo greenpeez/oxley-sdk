@@ -8,7 +8,7 @@ Solidity interface are sufficient for a provider's own integration.
 
 | Material | Included location |
 | --- | --- |
-| Installable JavaScript and TypeScript types | `@oxley/sdk@0.5.0-next.2`, on the `next` release line |
+| Installable JavaScript and TypeScript types | `@oxley/sdk@0.5.0-next.2`, the default `latest` release |
 | Full curve and registry ABI JSON | `abis/` |
 | Auction controller, bid router, adapter and CCA ABI JSON | `abis/`, see [auction guide](auctions.md) |
 | Unsigned bid, claim and full/partial refund helpers | `@oxley/sdk/auctions`, `examples/auction.ts` |

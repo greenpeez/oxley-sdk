@@ -12,18 +12,34 @@ contracts even when the SDK is bypassed.
 
 This repository contains the **Elysium SDK**, version `0.5.0-next.2`, as ESM with
 TypeScript declarations. It is a different API from the legacy `@oxley/sdk`
-`0.4.1` release. The legacy `latest` channel is left unchanged; this release is
-designated for `next`. It is not a drop-in upgrade for `@oxley/sdk/release` or
-`@oxley/sdk/evm` consumers.
+`0.4.1` release. The Elysium release is the default `latest` channel. Its
+prerelease version does not imply mainnet readiness. It is not a drop-in upgrade
+for `@oxley/sdk/release` or `@oxley/sdk/evm` consumers; those integrations should
+remain pinned to `@oxley/sdk@0.4.1` until migrated.
 
 Install the Elysium SDK preview, including auction transactions and public data:
 
 ```sh
-npm install @oxley/sdk@0.5.0-next.2
+npm install @oxley/sdk
 ```
 
 Version `0.5.0-next.0` provides trading integration, not the data client.
 Mainnet bindings remain pending; the included manifest and public feeds are testnet only.
+
+## Release Channel
+
+Normal releases publish to `latest`, which controls the default npm page and
+unversioned installs. Use an explicit `--tag next` only for an opt-in preview.
+Promote an already-published release without republishing its code:
+
+```sh
+npm dist-tag add @oxley/sdk@<version> latest
+npm view @oxley/sdk version dist-tags
+```
+
+Published version archives are immutable; older archives may still describe the
+release channel that applied when they were published. The registry's current
+dist-tags determine the default version.
 
 ## Auction Transactions
 

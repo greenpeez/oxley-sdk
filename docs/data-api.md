@@ -3,7 +3,8 @@
 Release: `@oxley/sdk@0.5.0-next.2`, exported from `@oxley/sdk/data` (introduced in `0.5.0-next.1`).
 Public API root: `https://app.oxley.fun/api/data/v1`.
 Network: Elysium testnet, chain `99801`, Oxy-USDC. Mainnet is not enabled.
-Version `0.5.0-next.0` does not export `/data`; the legacy `latest` tag is unchanged.
+Version `0.5.0-next.0` does not export `/data`. The current Elysium SDK is the
+default `latest` release; legacy consumers can explicitly pin `0.4.1`.
 
 ## Access
 
