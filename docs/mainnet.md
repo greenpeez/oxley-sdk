@@ -20,6 +20,23 @@ testnet fallbacks or fake deployment addresses are supplied.
 | Source verification links | Mainnet verified curve and registry; token identity provenance | Oxley |
 | Active market | Coin and market ID after successful auction settlement | Oxley/market creator |
 
+## Auction And Data Bindings
+
+Auction participation additionally requires `auctionBindings` from the reviewed
+release: `controllerRuntimeCodeHash`, `bidRouter.address/runtimeCodeHash` and
+`adapter.address/runtimeCodeHash`. Use `parseAuctionDeployment` and the auction
+client to verify these alongside the controller, registry, token and on-chain
+auction bindings. The trading template alone does not supply these extra pins.
+See [auction integration](auctions.md). Mainnet auction execution needs its own
+acceptance checks; funded swap tests do not prove bid/refund/claim behavior there.
+
+Indexed data requires an explicitly enabled mainnet API deployment and approved
+mainnet indexer, chain, release and USDC bindings. The existing public API serves
+testnet only; changing a frontend's `chainId` cannot switch its data source to
+mainnet. No mainnet endpoint or deployment address is promised by this package.
+
+## Launch Validation
+
 Validate the reviewed manifest using `parseDeployment`, then call
 `verifyDeployment` over the actual mainnet RPC and discover the active market.
 Exercise `quote` and `checkSwap` with the actual caller. For proxies, separately

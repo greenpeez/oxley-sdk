@@ -1,6 +1,6 @@
 # Public Indexed Data API
 
-Release: `@oxley/sdk@0.5.0-next.2`, exported from `@oxley/sdk/data` (introduced in `0.5.0-next.1`).
+Release: `@oxley/sdk@0.5.0-next.3`, exported from `@oxley/sdk/data` (introduced in `0.5.0-next.1`; runtime unchanged from `0.5.0-next.2`).
 Public API root: `https://app.oxley.fun/api/data/v1`.
 Network: Elysium testnet, chain `99801`, Oxy-USDC. Mainnet is not enabled.
 Version `0.5.0-next.0` does not export `/data`. The current Elysium SDK is the
@@ -14,8 +14,8 @@ credentials. GET and OPTIONS only. The API reuses the approved indexers and thei
 release, reorg, freshness and capacity checks; it does not create a new ingestion
 service or perform quote/portfolio RPC enrichment.
 
-The API belongs on the Elysium application host, not the bridge-only `oxley.fun`
-host. The existing bridge-only route protection remains unchanged.
+The API belongs on the Elysium application host, `app.oxley.fun`.
+`oxley.fun/docs` hosts documentation, not the public data API.
 
 Use a configured API root ending in `/api/data/v1`. No production hostname is
 baked into the SDK. HTTP is accepted by the SDK only for localhost development.

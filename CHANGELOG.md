@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0-next.3 - 2026-10-16
+
+- Documentation-only release; no runtime, ABI, deployment-profile or dependency changes.
+- Correct trading versus auction-client scope and document independent RPC quotes,
+  locally computed minimums, approval sequencing and unknown-outcome recovery.
+- Add verified real testnet buy/sell transactions, output floors, balances and test limitations.
+- Synchronize provider, exchange, frontend-data and auction guidance with public Builders docs.
+
+Published to `latest`. Mainnet bindings and provider acceptance remain pending.
+Earlier version archives and their historical validation records are unchanged.
+
 ## 0.5.0-next.2 - 2026-10-16
 
 - Full controller, fee-aware bid router, adapter and CCA auction ABI JSON exports.

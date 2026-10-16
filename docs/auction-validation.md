@@ -1,6 +1,7 @@
 # Auction SDK Validation
 
-Release: `0.5.0-next.2`. Validation date: 2026-10-16.
+Auction implementation: `0.5.0-next.2`, unchanged in documentation release
+`0.5.0-next.3`. Validation date: 2026-10-16.
 
 ## Automated Coverage
 
@@ -36,7 +37,9 @@ At Elysium testnet chain `99801`, block `10026269`, hash
   and accepted-bid fee `100000`, all in six-decimal Oxy-USDC base units.
 
 This check verifies deployed reads, not a new funded bid or a successful mainnet
-launch. All transaction execution for this release was on an isolated local EVM.
+launch. Auction transaction execution in this validation was on an isolated local EVM.
+The separate [funded buy/sell tests](funded-swaps-2026-10-16.md) exercise
+post-auction trading, not funded auction bid/claim/refund helpers.
 These tests are not an independent security audit. Mainnet remains gated on a
 reviewed real-USDC deployment manifest and verification of that deployment.
 

@@ -10,21 +10,31 @@ accessor, or Uniswap v4 hook. Providers keep their usual funding,
 transaction submission and final-recipient settlement. Fees are enforced by the
 contracts even when the SDK is bypassed.
 
-This repository contains the **Elysium SDK**, version `0.5.0-next.2`, as ESM with
+This repository contains the **Elysium SDK**, version `0.5.0-next.3`, as ESM with
 TypeScript declarations. It is a different API from the legacy `@oxley/sdk`
 `0.4.1` release. The Elysium release is the default `latest` channel. Its
 prerelease version does not imply mainnet readiness. It is not a drop-in upgrade
 for `@oxley/sdk/release` or `@oxley/sdk/evm` consumers; those integrations should
 remain pinned to `@oxley/sdk@0.4.1` until migrated.
 
-Install the Elysium SDK preview, including auction transactions and public data:
+Install the Elysium SDK, including auction transactions and public data:
 
 ```sh
 npm install @oxley/sdk
 ```
 
-Version `0.5.0-next.0` provides trading integration, not the data client.
+The `/data` module was introduced in `0.5.0-next.1`; `/auctions` in
+`0.5.0-next.2`. Version `0.5.0-next.3` updates documentation only; its runtime,
+ABIs, deployment profiles and dependencies are unchanged from `0.5.0-next.2`.
 Mainnet bindings remain pending; the included manifest and public feeds are testnet only.
+
+## Start Here
+
+- [Public Builders docs](https://oxley.fun/docs/builders) and [npm package](https://www.npmjs.com/package/@oxley/sdk).
+- Aggregators and exchanges: [provider handoff](docs/provider-handoff.md), [0x source guide](docs/0x.md), [mainnet requirements](docs/mainnet.md).
+- Frontend builders: [indexed data API](docs/data-api.md) and [polling example](examples/live-data.ts).
+- Auction participation: [bid, claim and refund guide](docs/auctions.md) and [example](examples/auction.ts).
+- Evidence: [validation overview](docs/validation.md), [funded buy/sell results](docs/funded-swaps-2026-10-16.md), [auction tests](docs/auction-validation.md), [live data checks](docs/data-validation.md).
 
 ## Release Channel
 
@@ -125,6 +135,22 @@ inputs at one block, four in flight at a time, preserving per-sample errors.
 RPC failures are not liquidity-zero results. Quotes are observations, not price
 reservations; deadline and minimum output are enforced at execution.
 
+### Independent Quotes And Minimums
+
+Use `quote()` or `prepareSwap()` with your independently configured RPC and the
+reviewed deployment manifest, not an HTTP quote or an indexed-data response as
+signing authority. The minimum is computed locally as
+`floor(amountOut * (10000 - slippageBps) / 10000)` using bigint; a zero minimum is
+rejected. Comparing two backend-provided numbers does not authenticate either.
+
+Keep the user's input, selected pair, actual caller, deadline and slippage policy
+bound to the prepared transaction. Confirm approvals, obtain a fresh quote, and
+call `checkSwap(freshSwap, true)` before handing off to the wallet. That check does
+not silently lower the signed minimum. Refuse stale/failed reads, handle RPC
+cooldowns, and never fall back to a server-provided floor. The SDK does not own
+your wallet journal: preserve a submitted hash or unknown outcome across reloads
+and reconcile it before retrying. A timeout is not proof that nothing was sent.
+
 ## API
 
 | Method/export | Result |
@@ -149,10 +175,12 @@ Serialize bigint values as decimal strings at JSON boundaries.
 
 ## Integration Semantics
 
-- Only active registered auction markets against the configured USDC quote asset
-  are exposed by the trading client. Bid submission, delayed claims, bridges,
-  mint/twin markets, native payments and exact-output trading are outside this
-  package. The separate data client reads indexed bids; it never submits them.
+- The trading client exposes only active registered post-auction markets against
+  the configured USDC quote asset. Auction bids, principal refunds and token
+  claims are prepared by the separate `/auctions` client; they are not atomic
+  swap routes. The `/data` client is read-only. No SDK client signs or broadcasts.
+- Auction launches, bridge transfers, mint/twin markets, native-asset payments
+  and exact-output trading are outside the public package's current scope.
 - A market is identified by `(chainId, curve, marketId)`. Do not assume token
   symbols are identities or pick the first matching token across deployments.
 - Native on-chain reads are `quoteBuy(id,amount,caller)` and

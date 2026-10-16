@@ -4,11 +4,15 @@ Oxley's post-auction markets support USDC/token swaps with on-chain view quotes
 and immediate atomic settlement. The attached SDK is optional: the ABI and
 Solidity interface are sufficient for a provider's own integration.
 
+Public links: [GitHub](https://github.com/greenpeez/oxley-sdk),
+[npm](https://www.npmjs.com/package/@oxley/sdk), and
+[Builders docs](https://oxley.fun/docs/builders).
+
 ## Send Now
 
 | Material | Included location |
 | --- | --- |
-| Installable JavaScript and TypeScript types | `@oxley/sdk@0.5.0-next.2`, the default `latest` release |
+| Installable JavaScript and TypeScript types | `@oxley/sdk@0.5.0-next.3`, the default `latest` release; documentation-only update to `0.5.0-next.2` |
 | Full curve and registry ABI JSON | `abis/` |
 | Auction controller, bid router, adapter and CCA ABI JSON | `abis/`, see [auction guide](auctions.md) |
 | Unsigned bid, claim and full/partial refund helpers | `@oxley/sdk/auctions`, `examples/auction.ts` |
@@ -17,6 +21,8 @@ Solidity interface are sufficient for a provider's own integration.
 | Quote, approvals and calldata usage | `README.md`, `examples/` |
 | 0x optional source action and exact offsets | `docs/0x.md`, `@oxley/sdk/0x` |
 | Runtime and settlement test evidence | `docs/validation.md` |
+| Funded testnet buy/sell receipts and reconciled balances | `docs/funded-swaps-2026-10-16.md` |
+| Public indexed auctions, bids, trades, volume and candles | `@oxley/sdk/data`, `docs/data-api.md` |
 | Mainnet profile template and ownership | `deployments/mainnet.template.json`, `docs/mainnet.md` |
 
 ## Current Testnet Bindings
@@ -35,7 +41,7 @@ Solidity interface are sufficient for a provider's own integration.
 | Curve verification page | [Curve source and ABI](https://elysium.kinetiq.xyz/testnet-explorer/address/0x18bf92514c0d749a017aaf69153442703e1a966b?tab=contract) |
 
 These are **testnet** addresses. Do not ship them as mainnet bindings. The runtime
-pins match the retained release evidence and the fresh public RPC check. Explorer
+pins match the retained release evidence and recorded public RPC checks. Explorer
 source verification is not an independent security audit or proof of mainnet readiness.
 
 ## Discovery And Execution
@@ -57,6 +63,11 @@ Input approval and balance belong to the immediate caller, as do output and
 buying-reward identity. A provider's executor can fund, swap and pay its recipient
 in its existing transaction. There is no Oxley callback or private API handshake.
 
+Read quotes through the provider's own RPC and compute the minimum locally with
+`prepareSwap` or `minimumAmountOut`. Do not use indexed feeds or backend-supplied
+minimums as signing authority. Confirm approvals, requote and simulate before
+submission; preserve transaction hashes and unknown outcomes before retrying.
+
 ## Still Required For Live Mainnet Routing
 
 Oxley supplies the final reviewed mainnet manifest, real USDC-bound deployment,
@@ -67,13 +78,23 @@ shipping an SDK alone. No provider-specific contract extension is requested.
 
 ## Frontend Data Builders
 
-The separate `@oxley/sdk/data` client in `0.5.0-next.1` covers indexed auctions,
+The separate `@oxley/sdk/data` client, introduced in `0.5.0-next.1`, covers indexed auctions,
 wallet bids for a specified auction, recent auction events, trades, volume and candles.
 See [the data API guide](data-api.md) and [polling example](../examples/live-data.ts).
 Use `https://app.oxley.fun/api/data/v1` with chain ID `99801` and `model: 'cca'`.
 The current feeds are Elysium testnet/Oxy-USDC, without an API key or wallet.
 This display-data integration is distinct from aggregator execution or exchange
 token-listing, deposit/withdrawal, custody and confirmation-policy integrations.
+
+## Exchanges
+
+Use the trading SDK for on-chain execution, the auction client for participation,
+or the data client for market displays. An exchange's token listing, custody,
+deposit-crediting, withdrawal signing, confirmations/reorg handling and compliance
+remain its own integration. This SDK is not an exchange deposit or custody API.
+Use chain ID plus contract address/market ID as identity, not a ticker. Mainnet
+support must wait for the reviewed real-USDC graph and the exchange's acceptance
+checks; testnet output is not a mainnet settlement guarantee.
 
 ## Auction Participation
 

@@ -1,6 +1,7 @@
 # Auction Transactions
 
-Available in `@oxley/sdk@0.5.0-next.2` via `@oxley/sdk/auctions`. ESM, Node 20+,
+Available since `@oxley/sdk@0.5.0-next.2` via `@oxley/sdk/auctions`; current
+`0.5.0-next.3` changes documentation only. ESM, Node 20+,
 TypeScript and browser-compatible. No Oxley backend, API key or signer is required;
 supply a viem public client with sufficient RPC capacity. The module only reads
 chain state, simulates calls and returns unsigned transactions.

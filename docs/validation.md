@@ -1,9 +1,31 @@
 # Validation Evidence
 
-Recorded 2026-10-13. This evidence covers the SDK and its selected integration
+Updated 2026-10-16. This evidence covers the SDK and its selected integration
 surface, not whole-repository acceptance or a new contract security audit.
 
-## Completed Checks
+## Current Evidence
+
+- [Funded testnet buy and sell](funded-swaps-2026-10-16.md): completed through
+  the deployed application using the SDK's independent RPC quotes and locally
+  computed 1% minimums. Successful receipts, exact outputs, historical balances,
+  approvals and recovery were verified on 2026-10-16.
+- [Auction SDK validation](auction-validation.md): real-bytecode local
+  bid/refund/claim tests and read-only testnet graph/fee checks.
+- [Indexed data validation](data-validation.md): public API checks across all
+  eight resources, browser CORS and indexed-feed boundaries.
+- `0.5.0-next.3` is a documentation-only release. Runtime, ABIs, deployment
+  profiles and dependencies remain those of `0.5.0-next.2`.
+
+Documentation-release checks on October 16: TypeScript checks passed, all 32 SDK
+unit/ABI tests passed, the ESM/declaration build passed, and a clean consumer
+installed the actual archive and verified imports, types and the file allowlist.
+The public docs content/search suite passed all 17 tests. No new funded action
+was required or submitted for this documentation update.
+
+The funded trades do not prove funded auction participation, third-party wallet
+extension compatibility, 0x hosted-route acceptance or mainnet readiness.
+
+## Original Trading Checks (2026-10-13)
 
 | Check | Result |
 | --- | --- |
@@ -24,9 +46,9 @@ binding, and six-decimal token precision. This was read-only.
 An optional quote check for historical pilot market
 `0x71d75a89abd94f6e48e76b94da911ee67ac8a976525dd73908c0cd37661b2093`
 was correctly refused as an unsupported/inactive market. It is not a valid live
-swap example. No successful current live-market quote or funded remote swap is
-claimed by this evidence; quote and settlement parity were demonstrated locally
-with the retained real curve bytecode.
+swap example. That original run was read-only; quote and settlement parity were
+demonstrated locally with the retained real curve bytecode. The October 16 funded
+test above adds remote trade evidence without changing this historical result.
 
 ## Local Settlement Coverage
 
@@ -71,7 +93,7 @@ not covered. BASIC calldata compatibility is not hosted API source acceptance.
 `npm run build:test-executor` rebuilds that fixture from the vendored source.
 The public runtime has no Solidity compiler or test dependency. No protocol
 contract, remote deployment, wallet policy, funded transaction or external source
-configuration was changed during this SDK build.
+configuration was changed during the original October 13 SDK validation.
 
 The mainnet manifest is intentionally incomplete because mainnet chain/token/
 deployment information is unavailable. Supply the reviewed values, verify the
