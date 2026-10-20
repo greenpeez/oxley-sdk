@@ -190,7 +190,7 @@ export function createOxleyAuctionClient(options: { publicClient: RpcClient; dep
       claim ? "NOT_CLAIMABLE" : "ALREADY_EXITED", claim ? "Exit first; no unclaimed token allocation is available" : "Bid already exited");
     const args = { chainId: deployment.chainId, auction: auction.auction, bidId: input.bidId };
     const transaction: Transaction = claim ? buildAuctionClaim(args) : buildAuctionRefund({ ...args, partialFill: input.partialFill });
-    // Simulation enforces graduation, timing and exact partial-fill hints without writing chain state.
+    // Simulation enforces the auction outcome, timing and exact partial-fill hints without writing chain state.
     await rpc.call({ ...transaction, account: input.caller, blockNumber: at.blockNumber });
     await canonical(at);
     return { ...at, ...auction, transaction, bidId: input.bidId, owner: bid.owner, simulated: true as const };

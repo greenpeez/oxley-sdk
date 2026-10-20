@@ -82,7 +82,7 @@ owner and bid ID from a successful canonical receipt; never predict the next ID.
 checks the bid has not exited, and simulates the unsigned exit transaction.
 
 - Failed auction: `exitBid` returns the principal to its recorded owner once the
-  auction has ended and failed graduation. The accepted-bid fee is **not refunded**.
+  auction has ended without meeting its minimum raise. The accepted-bid fee is **not refunded**.
 - Successful fully filled bid: `exitBid` finalizes the allocation and returns
   unspent principal. This can be zero; it does not refund all spent funds.
 - Successful partially filled/outbid bid: pass
@@ -93,14 +93,14 @@ checks the bid has not exited, and simulates the unsigned exit transaction.
 Hints are bigint uint64 **CCA virtual checkpoint numbers**, not event receipt block
 numbers or timestamps. `outbidBlock: 0n` is the final-clearing-price-equality case,
 not a default hint. An outbid early exit is only available when the contract's
-graduation and checkpoint rules permit it. There is no arbitrary cancellation.
+success and checkpoint rules permit it. There is no arbitrary cancellation.
 The SDK deliberately does not fabricate a refund amount or auto-submit retries.
 
 ## Claim Tokens
 
 After the exit receipt succeeds, call `prepareClaim({ dealId, bidId, caller })`.
 It refuses bids not yet exited or with no remaining allocation, then simulates
-`claimTokens`. The contract enforces successful graduation and the claim block.
+`claimTokens`. The contract enforces that the auction succeeded and the claim block.
 Submit the returned transaction; tokens go to the recorded owner, never `caller`
 merely because it paid gas. Third parties may trigger exits/claims without acquiring
 the payout. Keeper-completed exits/claims are reflected by current reads; do not
