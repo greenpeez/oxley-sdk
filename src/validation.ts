@@ -1,8 +1,11 @@
 import { isAddress, maxUint256, zeroAddress, type Address, type Hex } from "viem";
-import type { Deployment } from "./types.js";
+import type { Deployment, DeploymentGeneration } from "./types.js";
 
 export class OxleyError extends Error {
-  constructor(readonly code: string, message: string) { super(message); this.name = "OxleyError"; }
+  /** `details` carries structured values for UIs (for example an allowance or opening time). */
+  constructor(readonly code: string, message: string, readonly details?: Readonly<Record<string, unknown>>) {
+    super(message); this.name = "OxleyError";
+  }
 }
 export function check(condition: unknown, code: string, message: string): asserts condition {
   if (!condition) throw new OxleyError(code, message);
@@ -29,8 +32,14 @@ function deploymentHeader(input: unknown): Deployment {
   check(d.network === "testnet" || d.network === "mainnet", "INVALID_NETWORK", "Explicit network required");
   check(typeof d.startBlock === "string" && /^(0|[1-9][0-9]*)$/.test(d.startBlock),
     "INVALID_START_BLOCK", "startBlock must be a decimal block number");
+  check(d.generation === undefined || d.generation === "flat-fee" || d.generation === "gen2",
+    "INVALID_GENERATION", "generation must be omitted, \"flat-fee\" or \"gen2\"");
+  for (const text of [d.status, d.note]) check(text === undefined || (typeof text === "string" && text.length > 0),
+    "INVALID_DEPLOYMENT", "status and note must be non-empty strings when present");
   return d;
 }
+/** Flat-fee unless the manifest explicitly declares another generation. */
+export const deploymentGeneration = (d: Pick<Deployment, "generation">): DeploymentGeneration => d.generation ?? "flat-fee";
 export function parseDeployment(input: unknown): Deployment {
   const d = deploymentHeader(input);
   for (const pin of [d.curve, d.registry, d.quoteToken]) {

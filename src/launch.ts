@@ -3,9 +3,12 @@ import { createOxleyAuctionClient, parseAuctionDeployment, type AuctionDeploymen
 import { registryAbi, tokenAbi } from "./abis.js";
 import { creatorAccountAbi, creatorAccountFactoryAbi, launchControllerAbi, launchEntryAbi,
   launchBondAbi, launchFloorAbi } from "./launch-abis.js";
-import { address, check, hash, sameAddress, uint } from "./validation.js";
+import { gen2AuctionControllerAbi, gen2CreatorAccountAbi } from "./gen2-abis.js";
+import { address, check, deploymentGeneration, hash, sameAddress, uint } from "./validation.js";
 import type { Anchor, ContractPin, RpcClient, Transaction } from "./types.js";
 export * from "./launch-abis.js";
+export * from "./gen2-abis.js";
+export { decodeOxleyRevert, type OxleyRevert, type OxleyRevertName } from "./revert.js";
 
 export type LaunchRpcClient = RpcClient & Pick<PublicClient, "getBalance" | "getTransactionCount" | "getGasPrice">;
 export interface LaunchDeployment extends AuctionDeployment {
@@ -28,6 +31,10 @@ export interface AuctionLaunchInput {
   creatorLockDays: 0 | 30 | 60;
   listingCommitmentBps: 5000 | 10000;
   auctionDurationHours: number;
+  /** Gen2 only: observed seconds per block, converting the hours into an exact CCA length. */
+  secondsPerBlock?: number;
+  /** Gen2 only: explicit CCA length within auctionDurationBounds(hours); takes precedence over secondsPerBlock. */
+  durationBlocks?: number;
 }
 /** Only launch carries native value; swaps and bids retain Transaction.value = 0n. */
 export interface AuctionLaunchTransaction extends Omit<Transaction, "value"> { readonly value: bigint; readonly gasPrice?: bigint }
@@ -35,6 +42,57 @@ const BOND = 500_000_000_000_000_000n;
 const Q96 = 1n << 96n, DENOMINATOR = 10n ** 36n;
 const MAX_PRICE = 50_505_050_505n * Q96 / (4n * 10n ** 18n);
 const ceil = (n: bigint, d: bigint) => (n + d - 1n) / d;
+/** Gen2 accepts 0.25 s (slowest) to 0.10 s (fastest) per block: 14,400-36,000 blocks per requested hour. */
+export const AUCTION_MIN_BLOCKS_PER_HOUR = 14_400;
+export const AUCTION_MAX_BLOCKS_PER_HOUR = 36_000;
+/** Default block-rate sample, matching the contracts' launcher recipe. */
+export const BLOCK_RATE_SAMPLE_BLOCKS = 20_000;
+const MIN_RATE_SAMPLE_BLOCKS = 1_000;
+
+export function auctionDurationBounds(hours: number): { readonly minimumBlocks: number; readonly maximumBlocks: number } {
+  check(Number.isInteger(hours) && hours >= 1 && hours <= 24, "INVALID_DURATION", "Auction duration must be 1-24 whole hours");
+  return Object.freeze({ minimumBlocks: hours * AUCTION_MIN_BLOCKS_PER_HOUR, maximumBlocks: hours * AUCTION_MAX_BLOCKS_PER_HOUR });
+}
+function blockRate(secondsPerBlock: unknown): asserts secondsPerBlock is number {
+  check(typeof secondsPerBlock === "number" && Number.isFinite(secondsPerBlock) && secondsPerBlock > 0,
+    "INVALID_BLOCK_RATE", "secondsPerBlock must be a finite positive number");
+}
+/** round(hours x 3600 / secondsPerBlock), accepted only within the Gen2 bounds for those hours. */
+export function auctionDurationBlocks(input: { hours: number; secondsPerBlock: number }): number {
+  const { minimumBlocks, maximumBlocks } = auctionDurationBounds(input.hours); blockRate(input.secondsPerBlock);
+  const blocks = Math.round(input.hours * 3600 / input.secondsPerBlock);
+  check(blocks >= minimumBlocks && blocks <= maximumBlocks, "INVALID_DURATION_BLOCKS",
+    `Observed block rate ${input.secondsPerBlock} s/block is outside the 0.10-0.25 s range the contracts accept `
+    + `(${blocks} blocks for ${input.hours} h; allowed ${minimumBlocks}-${maximumBlocks})`);
+  return blocks;
+}
+/** Average seconds per block over up to `blocks` blocks ending at `blockNumber` (default latest), never before `notBefore`. */
+export async function sampleSecondsPerBlock(rpc: Pick<RpcClient, "getBlock">,
+  options: { blocks?: number; notBefore?: bigint; blockNumber?: bigint } = {}) {
+  const requested = options.blocks ?? BLOCK_RATE_SAMPLE_BLOCKS;
+  check(Number.isSafeInteger(requested) && requested >= MIN_RATE_SAMPLE_BLOCKS && requested <= 1_000_000,
+    "INVALID_SAMPLE", "Sample 1,000 to 1,000,000 blocks");
+  if (options.notBefore !== undefined) uint(options.notBefore, false);
+  if (options.blockNumber !== undefined) uint(options.blockNumber, false);
+  const head = await rpc.getBlock(options.blockNumber === undefined ? { blockTag: "latest" } : { blockNumber: options.blockNumber });
+  check(head.number !== null && head.hash !== null, "INVALID_BLOCK", "A mined head block is required");
+  const floor = options.notBefore ?? 0n, available = head.number > floor ? head.number - floor : 0n;
+  const blocks = available < BigInt(requested) ? available : BigInt(requested);
+  check(blocks >= BigInt(MIN_RATE_SAMPLE_BLOCKS), "INSUFFICIENT_BLOCK_HISTORY",
+    `Only ${blocks} blocks are available to measure the block rate; supply secondsPerBlock or durationBlocks`);
+  const base = await rpc.getBlock({ blockNumber: head.number - blocks });
+  check(base.number === head.number - blocks && base.timestamp < head.timestamp,
+    "INVALID_BLOCK_RATE", "Block timestamps must increase across the sample");
+  return Object.freeze({ secondsPerBlock: Number(head.timestamp - base.timestamp) / Number(blocks), blocks: Number(blocks),
+    fromBlock: base.number, toBlock: head.number, fromTimestamp: base.timestamp, toTimestamp: head.timestamp });
+}
+function launchDurationBlocks(input: AuctionLaunchInput): number {
+  if (input.durationBlocks !== undefined) return input.durationBlocks;
+  check(input.secondsPerBlock !== undefined, "DURATION_BLOCKS_REQUIRED",
+    "Gen2 launches need secondsPerBlock (the live block rate) or an explicit durationBlocks");
+  return auctionDurationBlocks({ hours: input.auctionDurationHours, secondsPerBlock: input.secondsPerBlock });
+}
+const EXACT_ONLY = "This flat-fee release has no exact-duration launch; omit secondsPerBlock and durationBlocks";
 
 /** Mirrors the current adapter, including upward tick rounding and the vendor CCA ceiling. */
 export function quoteAuctionFloor(floorPriceWad: bigint) {
@@ -58,6 +116,12 @@ export function validateAuctionLaunch(input: AuctionLaunchInput): void {
   check([5000, 10000].includes(input.listingCommitmentBps), "INVALID_COMMITMENT", "Listing commitment must be 50% or 100%");
   check(Number.isInteger(input.auctionDurationHours) && input.auctionDurationHours >= 1 && input.auctionDurationHours <= 24,
     "INVALID_DURATION", "Auction duration must be 1-24 whole hours");
+  if (input.secondsPerBlock !== undefined) blockRate(input.secondsPerBlock);
+  if (input.durationBlocks !== undefined) {
+    const { minimumBlocks, maximumBlocks } = auctionDurationBounds(input.auctionDurationHours);
+    check(Number.isInteger(input.durationBlocks) && input.durationBlocks >= minimumBlocks && input.durationBlocks <= maximumBlocks,
+      "INVALID_DURATION_BLOCKS", `durationBlocks must be an integer from ${minimumBlocks} to ${maximumBlocks} for ${input.auctionDurationHours} h`);
+  }
   quoteAuctionFloor(input.floorPriceWad);
 }
 export function parseLaunchDeployment(input: unknown): LaunchDeployment {
@@ -85,8 +149,16 @@ export function buildCreatorAccount(input: { deployment: unknown; owner: Address
   return { chainId: d.chainId, to: d.launchBindings.creatorAccountFactory.address, value: 0n,
     data: encodeFunctionData({ abi: creatorAccountFactoryAbi, functionName: "createAccount", args: [input.dealId, input.owner] }) };
 }
+/** Flat-fee: hours-only method, unchanged. Gen2: exact-duration method; needs secondsPerBlock or durationBlocks. */
 export function buildAuctionLaunch(input: AuctionLaunchInput & { deployment: unknown; creatorAccount: Address }): AuctionLaunchTransaction {
   const d = parseLaunchDeployment(input.deployment); validateAuctionLaunch(input); address(input.creatorAccount);
+  if (deploymentGeneration(d) === "gen2") {
+    return { chainId: d.chainId, to: input.creatorAccount, value: BigInt(d.launchBindings.deployerBondWei),
+      data: encodeFunctionData({ abi: gen2CreatorAccountAbi, functionName: "launchAuctionWithCommitmentAndExactDuration",
+        args: [input.name, input.symbol, input.floorPriceWad, input.creatorLockDays, input.listingCommitmentBps,
+          input.auctionDurationHours, launchDurationBlocks(input)] }) };
+  }
+  check(input.secondsPerBlock === undefined && input.durationBlocks === undefined, "EXACT_DURATION_UNSUPPORTED", EXACT_ONLY);
   return { chainId: d.chainId, to: input.creatorAccount, value: BigInt(d.launchBindings.deployerBondWei),
     data: encodeFunctionData({ abi: creatorAccountAbi, functionName: "launchAuctionWithCommitmentAndDuration",
       args: [input.name, input.symbol, input.floorPriceWad, input.creatorLockDays, input.listingCommitmentBps, input.auctionDurationHours] }) };
@@ -97,6 +169,7 @@ export function createOxleyLaunchClient(options: { publicClient: LaunchRpcClient
   const rpc = options.publicClient, deployment = parseLaunchDeployment(options.deployment);
   const auctions = createOxleyAuctionClient({ publicClient: rpc, deployment });
   const pins = deployment.launchBindings, factory = pins.creatorAccountFactory.address, controller = deployment.auctionController;
+  const gen2 = deploymentGeneration(deployment) === "gen2";
   const maxAge = options.maxBlockAgeSeconds ?? 120;
   check(Number.isInteger(maxAge) && maxAge > 0 && maxAge <= 300, "INVALID_BLOCK_AGE", "Block age limit must be 1-300 seconds");
   const now = () => BigInt(Math.floor(Date.now() / 1000));
@@ -168,19 +241,41 @@ export function createOxleyLaunchClient(options: { publicClient: LaunchRpcClient
       const deal = await rpc.readContract({ address: deployment.registry.address, abi: registryAbi,
         functionName: "deal", args: [input.dealId], blockNumber: at.blockNumber });
       check(sameAddress(deal.creator, state.creatorAccount), "LAUNCH_BINDING_MISMATCH", "Auction belongs to another creator account");
+      const schedule = gen2 ? await scheduleAt(input.dealId, at) : null;
       await canonical(at);
-      return { ...at, ...state, dealId: input.dealId, auction: auction.auction };
+      return { ...at, ...state, dealId: input.dealId, auction: auction.auction, ...(schedule ? { schedule } : {} as { schedule?: never }) };
     }
     await canonical(at);
     return { ...at, ...state, dealId: input.dealId, creatorAccount: state?.creatorAccount ?? null, launched: false as const, auction: null };
   }
+  async function scheduleAt(dealId: Hex, at: Anchor) {
+    const [requestedHours, durationBlocks, targetEndTimestamp] = await rpc.readContract({ address: controller,
+      abi: gen2AuctionControllerAbi, functionName: "schedule", args: [dealId], blockNumber: at.blockNumber });
+    check(durationBlocks > 0, "LAUNCH_BINDING_MISMATCH", "Gen2 auction has no recorded schedule");
+    return { requestedHours, durationBlocks, targetEndTimestamp };
+  }
+  /** Gen2: exact CCA length from the supplied or sampled block rate, checked against on-chain bounds. */
+  async function exactDuration(input: AuctionLaunchInput, at: Anchor) {
+    const requestedHours = input.auctionDurationHours, local = auctionDurationBounds(requestedHours);
+    const sample = input.secondsPerBlock === undefined && input.durationBlocks === undefined
+      ? await sampleSecondsPerBlock(rpc, { notBefore: BigInt(deployment.startBlock), blockNumber: at.blockNumber }) : null;
+    const secondsPerBlock = input.secondsPerBlock ?? sample?.secondsPerBlock;
+    const durationBlocks = launchDurationBlocks({ ...input, secondsPerBlock });
+    const [minimumBlocks, maximumBlocks] = await rpc.readContract({ address: controller, abi: gen2AuctionControllerAbi,
+      functionName: "durationBounds", args: [requestedHours], blockNumber: at.blockNumber });
+    check(minimumBlocks === local.minimumBlocks && maximumBlocks === local.maximumBlocks, "DURATION_BOUNDS_MISMATCH",
+      "On-chain auction duration bounds differ from this SDK; do not launch against this release");
+    return { requestedHours, durationBlocks, durationBounds: local, secondsPerBlock: secondsPerBlock ?? null, rateSample: sample,
+      estimatedEndTimestamp: secondsPerBlock === undefined ? null : at.timestamp + BigInt(Math.round(durationBlocks * secondsPerBlock)) };
+  }
   async function prepareLaunch(input: AuctionLaunchInput) {
     validateAuctionLaunch(input);
+    check(gen2 || (input.secondsPerBlock === undefined && input.durationBlocks === undefined), "EXACT_DURATION_UNSUPPORTED", EXACT_ONLY);
     const state = await getLaunch(input);
     if (state.launched) return { ...state, stage: "complete" as const, transaction: null };
     check(state.publicLaunchEnabled && !state.entriesPaused, "LAUNCH_PAUSED", "Public launches are disabled or paused");
     const blockNumber = state.blockNumber, localFloor = quoteAuctionFloor(input.floorPriceWad);
-    const [available, deal, floor, balance, nativeBalance, pending, confirmed, gasPrice] = await Promise.all([
+    const [reads, duration] = await Promise.all([Promise.all([
       rpc.readContract({ address: controller, abi: launchControllerAbi, functionName: "isTickerAvailable", args: [input.symbol], blockNumber }),
       rpc.readContract({ address: deployment.registry.address, abi: registryAbi, functionName: "deal", args: [input.dealId], blockNumber }),
       rpc.readContract({ address: deployment.auctionBindings.adapter.address, abi: launchFloorAbi, functionName: "effectiveFloor", args: [input.floorPriceWad], blockNumber }),
@@ -188,7 +283,8 @@ export function createOxleyLaunchClient(options: { publicClient: LaunchRpcClient
       rpc.getBalance({ address: input.owner, blockNumber }),
       rpc.getTransactionCount({ address: input.owner, blockTag: "pending" }),
       rpc.getTransactionCount({ address: input.owner, blockTag: "latest" }), rpc.getGasPrice(),
-    ]);
+    ]), gen2 ? exactDuration(input, state) : null]);
+    const [available, deal, floor, balance, nativeBalance, pending, confirmed, gasPrice] = reads;
     check(available, "TICKER_UNAVAILABLE", "Ticker is already in use");
     check(sameAddress(deal.creator, zeroAddress), "DEAL_ID_USED", "Deal ID is already in use; do not create a new identity to retry");
     check(floor[0] === localFloor.floorPriceQ96 && floor[1] === localFloor.tickSpacingQ96,
@@ -202,7 +298,8 @@ export function createOxleyLaunchClient(options: { publicClient: LaunchRpcClient
       const allowance = await rpc.readContract({ address: deployment.quoteToken.address, abi: tokenAbi,
         functionName: "allowance", args: [input.owner, state.creatorAccount], blockNumber });
       stage = allowance >= state.launchFee ? "launch" : allowance === 0n ? "approve" : "reset";
-      transaction = stage === "launch" ? buildAuctionLaunch({ ...input, deployment, creatorAccount: state.creatorAccount })
+      transaction = stage === "launch" ? buildAuctionLaunch({ ...input, deployment, creatorAccount: state.creatorAccount,
+        ...(duration ? { durationBlocks: duration.durationBlocks } : {}) })
         : { chainId: deployment.chainId, to: deployment.quoteToken.address, value: 0n,
           data: encodeFunctionData({ abi: tokenAbi, functionName: "approve", args: [state.creatorAccount, stage === "reset" ? 0n : state.launchFee] }) };
     }
@@ -220,7 +317,8 @@ export function createOxleyLaunchClient(options: { publicClient: LaunchRpcClient
     check(await rpc.getTransactionCount({ address: input.owner, blockTag: "pending" }) === pending,
       "NONCE_CHANGED", "Wallet activity changed during preparation; prepare again");
     return { ...state, stage, transaction, owner: input.owner, ...localFloor, quoteBalance: balance, nativeBalance,
-      nonce: pending, gasEstimate, estimatedGasCost, expiresAt: state.timestamp + BigInt(maxAge), simulated: true as const };
+      nonce: pending, gasEstimate, estimatedGasCost, expiresAt: state.timestamp + BigInt(maxAge), simulated: true as const,
+      ...(duration ?? {} as Partial<NonNullable<typeof duration>>) };
   }
   return { deployment, verifyDeployment, getLaunch, prepareLaunch };
 }

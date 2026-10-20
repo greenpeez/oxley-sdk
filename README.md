@@ -10,7 +10,7 @@ accessor, or Uniswap v4 hook. Providers keep their usual funding,
 transaction submission and final-recipient settlement. Fees are enforced by the
 contracts even when the SDK is bypassed.
 
-This repository contains the **Elysium SDK**, version `0.5.0-next.4`, as ESM with
+This repository contains the **Elysium SDK**, version `0.6.0-next.0`, as ESM with
 TypeScript declarations. It is a different API from the legacy `@oxley/sdk`
 `0.4.1` release. The Elysium release is the default `latest` channel. Its
 prerelease version does not imply mainnet readiness. It is not a drop-in upgrade
@@ -26,7 +26,8 @@ npm install @oxley/sdk
 The `/data` module was introduced in `0.5.0-next.1`; `/auctions` in
 `0.5.0-next.2`. Version `0.5.0-next.4` adds `/launch`: verified auction launch
 preparation, creator-account ABIs, exact launch-fee approvals and resumable stages.
-Existing swap, data and bid/claim/refund APIs remain unchanged.
+Version `0.6.0-next.0` adds opt-in [Gen2 auction support](#gen2-auctions-exact-duration-breadth-rule-trading-gate).
+Existing swap, data and bid/claim/refund APIs remain unchanged for the deployed flat-fee release.
 Mainnet bindings remain pending; the included manifest and public feeds are testnet only.
 
 ## Start Here
@@ -84,6 +85,55 @@ See [auction integration](docs/auctions.md), [example](examples/auction.ts), and
 [auction validation](docs/auction-validation.md). Full compiler ABI JSON exports:
 `@oxley/sdk/abis/auction-controller.json`, `auction-bid-router.json`,
 `auction-adapter.json`, and `cca-auction.json` (all under `@oxley/sdk/abis/`).
+
+## Gen2 Auctions (Exact Duration, Breadth Rule, Trading Gate)
+
+Gen2 is the next auction contract generation. A manifest opts in with
+`"generation": "gen2"`; manifests without the field keep the flat-fee behaviour
+byte-for-byte. The same clients then add:
+
+- **Exact duration.** `prepareLaunch` samples the live block rate (up to 20,000
+  blocks, never before the manifest's `startBlock`), converts the creator's 1-24
+  hours with `auctionDurationBlocks`, checks the controller's `durationBounds(hours)`
+  and encodes `launchAuctionWithCommitmentAndExactDuration`. Supply `secondsPerBlock`
+  or `durationBlocks` to skip sampling. The 0.5 HYPE creator bond is unchanged.
+- **Breadth rule.** Each wallet's committed bid principal is capped at 10% of the
+  auction's minimum gross raise until the capped commitments cover that minimum
+  (at least ten wallets); then there is no per-wallet limit. The 0.1% bid fee is on
+  top of principal. The creator account and its owner cannot bid.
+  `getBidAllowance({ dealId, owner })` reports the hook state; `prepareBid` fails
+  closed with `WALLET_CAP_EXCEEDED` or `CREATOR_BID_NOT_ALLOWED` before simulation.
+- **Trading gate.** After settlement the curve stays closed until every successful
+  bid is delivered, or 10 minutes after activation at the latest.
+  `getTradingStatus(marketId)` returns `{ open, fallbackAt }`; quotes and swaps fail
+  closed with `TRADING_NOT_OPEN` while it is closed.
+
+```ts
+import { createPublicClient, http } from 'viem';
+import { createOxleyAuctionClient, decodeOxleyRevert } from '@oxley/sdk/auctions';
+import deployment from '@oxley/sdk/deployments/elysium-testnet-gen2.json'
+  with { type: 'json' };
+
+const publicClient = createPublicClient({ transport: http('https://testnet-rpc.elysium.kinetiq.xyz') });
+const auctions = createOxleyAuctionClient({ deployment, publicClient });
+const allowance = await auctions.getBidAllowance({ dealId, owner });
+// allowance.unlimited, or allowance.walletAllowance in six-decimal principal units
+try {
+  await auctions.prepareBid({ dealId, caller: owner, entered, maxPriceQ96, previousTick, deadline });
+} catch (error) {
+  // OxleyError codes, or a wallet/RPC revert decoded into a short message:
+  console.log(decodeOxleyRevert(error)?.message ?? error);
+}
+```
+
+**Planned addresses only.** `deployments/elysium-testnet-gen2.json` carries
+`"status": "planned-fork-addresses"`: addresses and runtime hashes from a local
+fork rehearsal, not a live deployment. Runtime-hash verification fails closed
+until those contracts exist on chain; a live Gen2 deploy replaces the file with
+its real addresses and `startBlock`. The flat-fee `elysium-testnet.json` stays the
+default profile. Full Gen2 ABIs are exported under `@oxley/sdk/abis/gen2/`
+(`auction-controller`, `creator-account`, `creator-account-factory`, `bid-router`,
+`bid-hook`, `adapter`, `curve`); source hashes are in [gen2-artifacts.json](docs/gen2-artifacts.json).
 
 ## Indexed Data
 
@@ -177,6 +227,7 @@ and reconcile it before retrying. A timeout is not proof that nothing was sent.
 | `verifyDeployment()` | Chain, runtime hash, quote binding and decimals checks |
 | `discoverMarkets({cursor?,fromBlock?,toBlock?,pageSize?,coin?})` | Event-based page of active auction markets and canonical cursor |
 | `getMarket(id, blockNumber?)` | Registry/curve-validated market and block identity |
+| `getTradingStatus(id, blockNumber?)` | Gen2 trading gate `{open, fallbackAt}`; flat-fee markets report `open: true` |
 | `quote(request)` | Exact-input quote for one market/pair/caller |
 | `quoteMany(requests, blockNumber?)` | Ordered settled results at the same block |
 | `prepareSwap({...request,slippageBps,ttlSeconds?})` | Fresh quote, transaction, required approval, output/reward receiver |
@@ -185,6 +236,7 @@ and reconcile it before retrying. A timeout is not proof that nothing was sent.
 | `buildApprovals(swap,currentAllowance)` | Exact allowance, with zero-first when necessary |
 | `minimumAmountOut(amountOut,slippageBps)` | Integer slippage floor; rejects a zero minimum |
 | `buildZeroExBasic(swap,proportionPpm?)` from `@oxley/sdk/0x` | Optional BASIC source action, not a complete user transaction |
+| `decodeOxleyRevert(errorOrData)` | Pure decoder for Gen2 rule reverts into `{name,args,message}`, else `null` |
 
 All amounts use bigint base units, not floating point. Coin precision is 18;
 USDC/Oxy-USDC precision is 6. Use viem `parseUnits`/`formatUnits` at UI boundaries.

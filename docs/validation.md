@@ -5,6 +5,11 @@ surface, not whole-repository acceptance or a new contract security audit.
 
 ## Current Evidence
 
+- Gen2 support (`0.6.0-next.0`, 2026-10-20, offline only): 54 unit/ABI tests
+  pass, including 14 Gen2 tests with mocked RPC fixtures; Gen2 ABIs are pinned by
+  sha256 and source commit in [gen2-artifacts.json](gen2-artifacts.json). The Gen2
+  manifest holds planned fork-rehearsal addresses, so no Gen2 testnet read, local
+  EVM or funded check has been run against these SDK paths yet.
 - [Auction launch validation](launch-validation.md): `0.5.0-next.4` adds unsigned
   launch preparation, creator-account ABIs and restart recovery. All 40 unit
   tests and 17 local EVM tests pass; read-only testnet checks verify launch pins,

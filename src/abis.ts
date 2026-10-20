@@ -1,6 +1,7 @@
 import { parseAbi } from "viem";
 export * from "./auction-abis.js";
 export * from "./launch-abis.js";
+export * from "./gen2-abis.js";
 
 // The deployed VNext curve uses deal IDs, not token-pair selectors.
 export const curveAbi = parseAbi([

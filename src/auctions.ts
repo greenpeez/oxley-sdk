@@ -1,13 +1,17 @@
-import { keccak256, type Address, type Hex } from "viem";
+import { keccak256, maxUint256, type Address, type Hex } from "viem";
 import { auctionControllerAbi, auctionBidRouterAbi, auctionAdapterAbi, ccaAuctionAbi } from "./auction-abis.js";
+import { breadthBidHookAbi } from "./gen2-abis.js";
 import { registryAbi, tokenAbi } from "./abis.js";
 import { bidInputs, buildAuctionBid, buildAuctionBidApprovals, buildAuctionClaim, buildAuctionRefund,
   type AuctionBidInput, type PartialFillHints } from "./auction-transactions.js";
-import { address, check, hash, parseDeployment, sameAddress, uint } from "./validation.js";
+import { walletCapMessage } from "./revert.js";
+import { address, check, deploymentGeneration, hash, OxleyError, parseDeployment, sameAddress, uint } from "./validation.js";
 import type { Anchor, ContractPin, Deployment, RpcClient, Transaction } from "./types.js";
 export { buildAuctionBid, buildAuctionBidApprovals, buildAuctionClaim, buildAuctionRefund } from "./auction-transactions.js";
 export type { AuctionBidInput, PartialFillHints } from "./auction-transactions.js";
 export * from "./auction-abis.js";
+export * from "./gen2-abis.js";
+export { decodeOxleyRevert, type OxleyRevert, type OxleyRevertName } from "./revert.js";
 
 export interface AuctionDeployment extends Deployment {
   auctionBindings: { controllerRuntimeCodeHash: Hex; bidRouter: ContractPin; adapter: ContractPin };
@@ -30,7 +34,7 @@ export function parseAuctionDeployment(input: unknown): AuctionDeployment {
 export function createOxleyAuctionClient(options: { publicClient: RpcClient; deployment: unknown }) {
   const rpc = options.publicClient, deployment = parseAuctionDeployment(options.deployment);
   const { bidRouter, adapter } = deployment.auctionBindings;
-  const controller = deployment.auctionController;
+  const controller = deployment.auctionController, gen2 = deploymentGeneration(deployment) === "gen2";
   async function anchor(): Promise<Anchor> {
     const [chain, block] = await Promise.all([rpc.getChainId(), rpc.getBlock({ blockTag: "latest" })]);
     check(chain === deployment.chainId, "CHAIN_MISMATCH", "RPC chain does not match deployment");
@@ -72,7 +76,8 @@ export function createOxleyAuctionClient(options: { publicClient: RpcClient; dep
     address(hook);
     return hook;
   }
-  async function auctionAt(dealId: Hex, at: Anchor) {
+  async function auctionAt(dealId: Hex, at: Anchor) { return (await resolveAt(dealId, at)).auction; }
+  async function resolveAt(dealId: Hex, at: Anchor) {
     hash(dealId);
     const hook = await verifyAt(at), blockNumber = at.blockNumber;
     const [campaign, deal, auction] = await Promise.all([
@@ -93,7 +98,43 @@ export function createOxleyAuctionClient(options: { publicClient: RpcClient; dep
     ]);
     check(code && code !== "0x" && sameAddress(coin, deal.coin) && sameAddress(currency, deployment.quoteToken.address)
       && sameAddress(auctionHook, hook), "AUCTION_BINDING_MISMATCH", "Unexpected auction token, currency or hook");
-    return { dealId, auction, coin, open: campaign[4], status: deal.status };
+    return { hook, auction: { dealId, auction, coin, open: campaign[4], status: deal.status } };
+  }
+  /** Gen2 breadth-rule state for one owner, read from the hook bound to the verified router and adapter. */
+  async function breadthAt(auction: Address, owner: Address, hook: Address, blockNumber: bigint) {
+    const base = { address: hook, abi: breadthBidHookAbi, blockNumber } as const;
+    const [router, registered, walletAllowance, walletCap, minimumGrossRaise, counted, breadthReached, committed, creatorExcluded] = await Promise.all([
+      rpc.readContract({ ...base, functionName: "bidRouter" }),
+      rpc.readContract({ ...base, functionName: "isRegistered", args: [auction] }),
+      rpc.readContract({ ...base, functionName: "walletAllowance", args: [auction, owner] }),
+      rpc.readContract({ ...base, functionName: "walletCap", args: [auction] }),
+      rpc.readContract({ ...base, functionName: "minimumGrossRaise", args: [auction] }),
+      rpc.readContract({ ...base, functionName: "counted", args: [auction] }),
+      rpc.readContract({ ...base, functionName: "breadthReached", args: [auction] }),
+      rpc.readContract({ ...base, functionName: "committed", args: [auction, owner] }),
+      rpc.readContract({ ...base, functionName: "isExcludedBidder", args: [auction, owner] }),
+    ]);
+    check(sameAddress(router, bidRouter.address), "AUCTION_BINDING_MISMATCH", "Bid hook is bound to another router");
+    // Mirrors the hook's own rules; any disagreement means an unexpected hook, so fail closed.
+    const expected = !registered || creatorExcluded ? 0n : breadthReached ? maxUint256 : committed >= walletCap ? 0n : walletCap - committed;
+    check(walletAllowance === expected && breadthReached === (registered && counted >= minimumGrossRaise)
+      && (!registered || (walletCap > 0n && minimumGrossRaise > 0n)), "INVALID_BID_HOOK_STATE", "Bid hook views are inconsistent");
+    return Object.freeze({ hook, registered, walletAllowance, unlimited: walletAllowance === maxUint256, walletCap,
+      minimumGrossRaise, counted, breadthReached, committed, creatorExcluded });
+  }
+  function requireBidAllowed(breadth: Awaited<ReturnType<typeof breadthAt>>, owner: Address, principal: bigint) {
+    check(breadth.registered, "AUCTION_NOT_REGISTERED", "This auction is not registered with the bid rules and cannot accept bids");
+    if (breadth.creatorExcluded) throw new OxleyError("CREATOR_BID_NOT_ALLOWED", "Creators can't bid on their own auction", { owner });
+    if (!breadth.unlimited && principal > breadth.walletAllowance) throw new OxleyError("WALLET_CAP_EXCEEDED",
+      walletCapMessage(breadth.walletAllowance, deployment.quoteToken.symbol), { owner, principal, walletAllowance: breadth.walletAllowance });
+  }
+  async function getBidAllowance(input: { dealId: Hex; owner: Address }) {
+    check(gen2, "GEN2_REQUIRED", "Bid allowances exist only on Gen2 deployments");
+    hash(input.dealId); address(input.owner);
+    const at = await anchor(), { hook, auction } = await resolveAt(input.dealId, at);
+    const breadth = await breadthAt(auction.auction, input.owner, hook, at.blockNumber);
+    await canonical(at);
+    return { ...at, ...auction, owner: input.owner, ...breadth };
   }
   async function verifyDeployment() {
     const at = await anchor(); await verifyAt(at); await canonical(at);
@@ -105,9 +146,9 @@ export function createOxleyAuctionClient(options: { publicClient: RpcClient; dep
   }
   async function prepareBid(input: AuctionBidInput & { caller: Address; simulate?: boolean }) {
     bidInputs(input); address(input.caller);
-    const at = await anchor(), auction = await auctionAt(input.dealId, at), blockNumber = at.blockNumber;
+    const at = await anchor(), { hook, auction } = await resolveAt(input.dealId, at), blockNumber = at.blockNumber;
     check(input.deadline > at.timestamp, "EXPIRED_DEADLINE", "Supply a future Unix deadline");
-    const [quoted, start, end, current, floor, spacing, maximum, balance, allowance] = await Promise.all([
+    const [reads, breadth] = await Promise.all([Promise.all([
       rpc.readContract({ address: bidRouter.address, abi: auctionBidRouterAbi, functionName: "quoteBid", args: [input.entered], blockNumber }),
       rpc.readContract({ address: auction.auction, abi: ccaAuctionAbi, functionName: "startBlock", blockNumber }),
       rpc.readContract({ address: auction.auction, abi: ccaAuctionAbi, functionName: "endBlock", blockNumber }),
@@ -117,12 +158,15 @@ export function createOxleyAuctionClient(options: { publicClient: RpcClient; dep
       rpc.readContract({ address: auction.auction, abi: ccaAuctionAbi, functionName: "MAX_BID_PRICE", blockNumber }),
       rpc.readContract({ address: deployment.quoteToken.address, abi: tokenAbi, functionName: "balanceOf", args: [input.caller], blockNumber }),
       rpc.readContract({ address: deployment.quoteToken.address, abi: tokenAbi, functionName: "allowance", args: [input.caller, bidRouter.address], blockNumber }),
-    ]);
+    ]), gen2 ? breadthAt(auction.auction, input.caller, hook, blockNumber) : null]);
+    const [quoted, start, end, current, floor, spacing, maximum, balance, allowance] = reads;
     check(auction.open && current >= start && current < end, "AUCTION_NOT_OPEN", "Auction is not accepting bids");
     check(spacing > 0n && input.maxPriceQ96 > floor && input.maxPriceQ96 <= maximum
       && input.maxPriceQ96 % spacing === 0n, "INVALID_BID_PRICE", "Bid price must be above floor, on tick and within the CCA ceiling");
     const [principal, debit, fee] = quoted;
     check(principal > 0n && debit === principal + fee, "INVALID_BID_QUOTE", "Inconsistent router quote");
+    // Gen2: the hook's cap applies to principal; fail closed here rather than in simulation or the wallet.
+    if (breadth) requireBidAllowed(breadth, input.caller, principal);
     const transaction = buildAuctionBid({ ...input, chainId: deployment.chainId, bidRouter: bidRouter.address });
     const approvals = buildAuctionBidApprovals({ chainId: deployment.chainId, quoteToken: deployment.quoteToken.address,
       bidRouter: bidRouter.address, debit, currentAllowance: allowance });
@@ -133,7 +177,8 @@ export function createOxleyAuctionClient(options: { publicClient: RpcClient; dep
     }
     await canonical(at);
     return { ...at, ...auction, transaction, principal, debit, fee, approvals, balance, allowance,
-      sufficientBalance: balance >= debit, owner: input.caller, simulated: input.simulate === true };
+      sufficientBalance: balance >= debit, owner: input.caller, simulated: input.simulate === true,
+      ...(breadth ? { bidAllowance: breadth } : {} as { bidAllowance?: never }) };
   }
   async function recovery(input: { dealId: Hex; bidId: bigint; caller: Address; partialFill?: PartialFillHints }, claim: boolean) {
     uint(input.bidId, false); address(input.caller);
@@ -150,7 +195,7 @@ export function createOxleyAuctionClient(options: { publicClient: RpcClient; dep
     await canonical(at);
     return { ...at, ...auction, transaction, bidId: input.bidId, owner: bid.owner, simulated: true as const };
   }
-  return { deployment, verifyDeployment, getAuction, prepareBid,
+  return { deployment, verifyDeployment, getAuction, getBidAllowance, prepareBid,
     prepareClaim: (input: { dealId: Hex; bidId: bigint; caller: Address }) => recovery(input, true),
     prepareRefund: (input: { dealId: Hex; bidId: bigint; caller: Address; partialFill?: PartialFillHints }) => recovery(input, false),
   };

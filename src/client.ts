@@ -1,7 +1,9 @@
 import { encodeFunctionData, keccak256, parseAbiItem, type Address, type Hex } from "viem";
 import { curveAbi, registryAbi, tokenAbi } from "./abis.js";
+import { gen2CurveAbi } from "./gen2-abis.js";
+import { tradingNotOpenMessage } from "./revert.js";
 import { buildApprovals, buildSwap } from "./transactions.js";
-import { address, check, hash, OxleyError, parseDeployment, sameAddress, uint } from "./validation.js";
+import { address, check, deploymentGeneration, hash, OxleyError, parseDeployment, sameAddress, uint } from "./validation.js";
 import type { Anchor, DiscoveryCursor, Market, Quote, QuoteRequest, RpcClient, Swap } from "./types.js";
 
 type DiscoveryOptions = { cursor?: DiscoveryCursor; fromBlock?: bigint; toBlock?: bigint; pageSize?: number; coin?: Address };
@@ -12,6 +14,7 @@ export function createOxleyClient(options: { publicClient: RpcClient; deployment
   const rpc = options.publicClient;
   const deployment = parseDeployment(options.deployment);
   const startBlock = BigInt(deployment.startBlock);
+  const gated = deploymentGeneration(deployment) === "gen2";
 
   async function snapshot(blockNumber?: bigint): Promise<Anchor> {
     if (blockNumber !== undefined) uint(blockNumber, false);
@@ -74,6 +77,33 @@ export function createOxleyClient(options: { publicClient: RpcClient; deployment
     return Object.freeze({ id, coin: market.coin, coinDecimals, creator: market.creator,
       activatedAt: market.activatedAt, quoteToken: deployment.quoteToken.address, curve: deployment.curve.address });
   }
+  /** Gen2 curve gate: closed until settlement delivery completes or its timed fallback passes. */
+  async function gateAt(market: Market, anchor: Anchor) {
+    const at = { address: deployment.curve.address, abi: gen2CurveAbi, args: [market.id], blockNumber: anchor.blockNumber } as const;
+    const [open, fallbackAt] = await Promise.all([
+      rpc.readContract({ ...at, functionName: "tradingOpen" }), rpc.readContract({ ...at, functionName: "tradingFallbackAt" }),
+    ]);
+    check(fallbackAt > market.activatedAt && (open || anchor.timestamp < fallbackAt),
+      "INVALID_TRADING_GATE", "Curve trading gate state is inconsistent");
+    return { open, fallbackAt };
+  }
+  // Quotes stay readable on chain while the gate is closed, but a swap would revert: fail closed.
+  async function tradableMarketAt(id: Hex, anchor: Anchor): Promise<Market> {
+    const market = await marketAt(id, anchor);
+    if (!gated) return market;
+    const { open, fallbackAt } = await gateAt(market, anchor);
+    if (!open) throw new OxleyError("TRADING_NOT_OPEN", tradingNotOpenMessage(fallbackAt), { marketId: id, fallbackAt });
+    return market;
+  }
+  /** Flat-fee markets have no gate and report open with no fallback time. */
+  async function getTradingStatus(id: Hex, blockNumber?: bigint) {
+    const anchor = await snapshot(blockNumber);
+    await ensureVerified(anchor);
+    const market = await marketAt(id, anchor);
+    const gate = gated ? await gateAt(market, anchor) : { open: true, fallbackAt: null };
+    await assertCanonical(anchor);
+    return { marketId: id, gated, ...gate, ...anchor };
+  }
   async function getMarket(id: Hex, blockNumber?: bigint) {
     const anchor = await snapshot(blockNumber);
     await ensureVerified(anchor);
@@ -86,7 +116,7 @@ export function createOxleyClient(options: { publicClient: RpcClient; deployment
     uint(request.amountIn); address(request.caller); address(request.tokenIn); address(request.tokenOut);
     hash(request.marketId);
     const key = request.marketId.toLowerCase();
-    const pendingMarket = markets?.get(key) ?? marketAt(request.marketId, anchor);
+    const pendingMarket = markets?.get(key) ?? tradableMarketAt(request.marketId, anchor);
     markets?.set(key, pendingMarket);
     const market = await pendingMarket;
     const buy = sameAddress(request.tokenIn, market.quoteToken) && sameAddress(request.tokenOut, market.coin);
@@ -214,5 +244,5 @@ export function createOxleyClient(options: { publicClient: RpcClient; deployment
     await assertCanonical(anchor);
     return { ...anchor, balance, allowance, approvals, sufficientBalance: balance >= current.amountIn, gas };
   }
-  return { deployment, verifyDeployment, getMarket, quote, quoteMany, discoverMarkets, prepareSwap, checkSwap };
+  return { deployment, verifyDeployment, getMarket, getTradingStatus, quote, quoteMany, discoverMarkets, prepareSwap, checkSwap };
 }

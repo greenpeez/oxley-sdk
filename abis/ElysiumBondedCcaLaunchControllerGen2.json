@@ -1,0 +1,1211 @@
+[
+ {
+  "type": "constructor",
+  "inputs": [
+   {
+    "name": "deps",
+    "type": "tuple",
+    "internalType": "struct ElysiumBondedCcaLaunchControllerGen2.Dependencies",
+    "components": [
+     {
+      "name": "entry",
+      "type": "address",
+      "internalType": "contract IElysiumEntryController"
+     },
+     {
+      "name": "coins",
+      "type": "address",
+      "internalType": "contract ElysiumCoinFactory"
+     },
+     {
+      "name": "registry",
+      "type": "address",
+      "internalType": "contract IElysiumDealRegistry"
+     },
+     {
+      "name": "coordinator",
+      "type": "address",
+      "internalType": "contract ElysiumProtocolCoordinatorVNext"
+     },
+     {
+      "name": "adapter",
+      "type": "address",
+      "internalType": "contract IElysiumExactCcaAdapter"
+     },
+     {
+      "name": "quote",
+      "type": "address",
+      "internalType": "contract IERC20"
+     },
+     {
+      "name": "capacity",
+      "type": "address",
+      "internalType": "contract ElysiumAuctionDeliveryCapacity"
+     },
+     {
+      "name": "bidRouter",
+      "type": "address",
+      "internalType": "contract ElysiumCcaBidRouterGen2"
+     }
+    ]
+   },
+   {
+    "name": "profileDigest_",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   },
+   {
+    "name": "launchFee_",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "minimumRaise_",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "owner_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "pins_",
+    "type": "tuple",
+    "internalType": "struct ElysiumBondedCcaLaunchControllerGen2.CodePins",
+    "components": [
+     {
+      "name": "adapter",
+      "type": "bytes32",
+      "internalType": "bytes32"
+     },
+     {
+      "name": "ccaFactory",
+      "type": "bytes32",
+      "internalType": "bytes32"
+     },
+     {
+      "name": "batcherFactory",
+      "type": "bytes32",
+      "internalType": "bytes32"
+     }
+    ]
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "ADAPTER_CODE_HASH",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "AUCTION_SUPPLY",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "BATCHER_FACTORY_CODE_HASH",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "BPS",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "CURVE_INVENTORY",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "FACTORY_CODE_HASH",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "FIXED_SUPPLY",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "MAX_CCA_ROUNDING_DUST",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "PLATFORM_BPS",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "bondEscrow",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract ElysiumAuctionBondEscrow"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "campaign",
+  "inputs": [
+   {
+    "name": "dealId",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "creator",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "coin",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "auctionId",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   },
+   {
+    "name": "endBlock",
+    "type": "uint64",
+    "internalType": "uint64"
+   },
+   {
+    "name": "open",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "ccaAdapter",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IElysiumExactCcaAdapter"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "coinFactory",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract ElysiumCoinFactory"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "coordinator",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract ElysiumProtocolCoordinator"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "creatorAccountFactory",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IElysiumCreatorAccountFactory"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "creatorControllerOf",
+  "inputs": [
+   {
+    "name": "creator",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "deliveryCapacity",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract ElysiumAuctionDeliveryCapacity"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "durationBounds",
+  "inputs": [
+   {
+    "name": "requestedHours",
+    "type": "uint8",
+    "internalType": "uint8"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "minimumBlocks",
+    "type": "uint32",
+    "internalType": "uint32"
+   },
+   {
+    "name": "maximumBlocks",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ],
+  "stateMutability": "pure"
+ },
+ {
+  "type": "function",
+  "name": "enablePublicLaunch",
+  "inputs": [],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "entryController",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IElysiumEntryController"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "feeBidRouter",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract ElysiumCcaBidRouterGen2"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "isTickerAvailable",
+  "inputs": [
+   {
+    "name": "symbol",
+    "type": "string",
+    "internalType": "string"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "launchFee",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "minimumGrossRaise",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "minimumRaise",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "open",
+  "inputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   },
+   {
+    "name": "",
+    "type": "string",
+    "internalType": "string"
+   },
+   {
+    "name": "",
+    "type": "string",
+    "internalType": "string"
+   },
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "",
+    "type": "uint8",
+    "internalType": "uint8"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "payable"
+ },
+ {
+  "type": "function",
+  "name": "openWithListing",
+  "inputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   },
+   {
+    "name": "",
+    "type": "string",
+    "internalType": "string"
+   },
+   {
+    "name": "",
+    "type": "string",
+    "internalType": "string"
+   },
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "",
+    "type": "uint8",
+    "internalType": "uint8"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "payable"
+ },
+ {
+  "type": "function",
+  "name": "openWithListingCommitment",
+  "inputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   },
+   {
+    "name": "",
+    "type": "string",
+    "internalType": "string"
+   },
+   {
+    "name": "",
+    "type": "string",
+    "internalType": "string"
+   },
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "",
+    "type": "uint8",
+    "internalType": "uint8"
+   },
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "payable"
+ },
+ {
+  "type": "function",
+  "name": "openWithListingCommitmentAndDuration",
+  "inputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   },
+   {
+    "name": "",
+    "type": "string",
+    "internalType": "string"
+   },
+   {
+    "name": "",
+    "type": "string",
+    "internalType": "string"
+   },
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "",
+    "type": "uint8",
+    "internalType": "uint8"
+   },
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   },
+   {
+    "name": "",
+    "type": "uint8",
+    "internalType": "uint8"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "payable"
+ },
+ {
+  "type": "function",
+  "name": "openWithListingCommitmentAndExactDuration",
+  "inputs": [
+   {
+    "name": "dealId",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   },
+   {
+    "name": "name",
+    "type": "string",
+    "internalType": "string"
+   },
+   {
+    "name": "symbol",
+    "type": "string",
+    "internalType": "string"
+   },
+   {
+    "name": "floorPriceWad",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "creatorLockDays",
+    "type": "uint8",
+    "internalType": "uint8"
+   },
+   {
+    "name": "commitmentBps",
+    "type": "uint16",
+    "internalType": "uint16"
+   },
+   {
+    "name": "requestedHours",
+    "type": "uint8",
+    "internalType": "uint8"
+   },
+   {
+    "name": "durationBlocks",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "coinAddress",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "auctionId",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "payable"
+ },
+ {
+  "type": "function",
+  "name": "owner",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "profileDigest",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "publicLaunchEnabled",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "quoteAsset",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IERC20"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "registry",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IElysiumDealRegistry"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "renounceOwnership",
+  "inputs": [],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "schedule",
+  "inputs": [
+   {
+    "name": "dealId",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "requestedHours",
+    "type": "uint8",
+    "internalType": "uint8"
+   },
+   {
+    "name": "durationBlocks",
+    "type": "uint32",
+    "internalType": "uint32"
+   },
+   {
+    "name": "targetEndTimestamp",
+    "type": "uint64",
+    "internalType": "uint64"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "setBondEscrow",
+  "inputs": [
+   {
+    "name": "escrow",
+    "type": "address",
+    "internalType": "contract ElysiumAuctionBondEscrow"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "setCreatorAccountFactory",
+  "inputs": [
+   {
+    "name": "factory",
+    "type": "address",
+    "internalType": "contract IElysiumCreatorAccountFactory"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "settle",
+  "inputs": [
+   {
+    "name": "dealId",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "transferOwnership",
+  "inputs": [
+   {
+    "name": "newOwner",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "event",
+  "name": "BondEscrowBound",
+  "inputs": [
+   {
+    "name": "escrow",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "CcaDealActivated",
+  "inputs": [
+   {
+    "name": "dealId",
+    "type": "bytes32",
+    "indexed": true,
+    "internalType": "bytes32"
+   },
+   {
+    "name": "proceeds",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "soldSupply",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "curveSeed",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "platformAmount",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "ccaRoundingDust",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "CcaDealFailed",
+  "inputs": [
+   {
+    "name": "dealId",
+    "type": "bytes32",
+    "indexed": true,
+    "internalType": "bytes32"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "CcaDealOpened",
+  "inputs": [
+   {
+    "name": "dealId",
+    "type": "bytes32",
+    "indexed": true,
+    "internalType": "bytes32"
+   },
+   {
+    "name": "auctionId",
+    "type": "bytes32",
+    "indexed": true,
+    "internalType": "bytes32"
+   },
+   {
+    "name": "coin",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "creator",
+    "type": "address",
+    "indexed": false,
+    "internalType": "address"
+   },
+   {
+    "name": "name",
+    "type": "string",
+    "indexed": false,
+    "internalType": "string"
+   },
+   {
+    "name": "symbol",
+    "type": "string",
+    "indexed": false,
+    "internalType": "string"
+   },
+   {
+    "name": "endBlock",
+    "type": "uint64",
+    "indexed": false,
+    "internalType": "uint64"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "CcaDealSchedule",
+  "inputs": [
+   {
+    "name": "dealId",
+    "type": "bytes32",
+    "indexed": true,
+    "internalType": "bytes32"
+   },
+   {
+    "name": "requestedHours",
+    "type": "uint8",
+    "indexed": false,
+    "internalType": "uint8"
+   },
+   {
+    "name": "durationBlocks",
+    "type": "uint32",
+    "indexed": false,
+    "internalType": "uint32"
+   },
+   {
+    "name": "targetEndTimestamp",
+    "type": "uint64",
+    "indexed": false,
+    "internalType": "uint64"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "CreatorAccountFactoryBound",
+  "inputs": [
+   {
+    "name": "factory",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "OwnershipTransferred",
+  "inputs": [
+   {
+    "name": "previousOwner",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "newOwner",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "PublicLaunchEnabled",
+  "inputs": [],
+  "anonymous": false
+ },
+ {
+  "type": "error",
+  "name": "ExactDurationRequired",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "FixtureLaunchOnly",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "InvalidAmount",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "InvalidBondBinding",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "InvalidConfiguration",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "InvalidDurationBlocks",
+  "inputs": [
+   {
+    "name": "durationBlocks",
+    "type": "uint32",
+    "internalType": "uint32"
+   },
+   {
+    "name": "minimumBlocks",
+    "type": "uint32",
+    "internalType": "uint32"
+   },
+   {
+    "name": "maximumBlocks",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "InvalidEntryBinding",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "InvalidListingCommitment",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "InvalidPosition",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "InvalidRequestedHours",
+  "inputs": [
+   {
+    "name": "requestedHours",
+    "type": "uint8",
+    "internalType": "uint8"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "InvalidSegment",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "InvalidSettlement",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "InventoryExhausted",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "ListingRequired",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "NotOpen",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "OwnableInvalidOwner",
+  "inputs": [
+   {
+    "name": "owner",
+    "type": "address",
+    "internalType": "address"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "OwnableUnauthorizedAccount",
+  "inputs": [
+   {
+    "name": "account",
+    "type": "address",
+    "internalType": "address"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "PublicLaunchAlreadyEnabled",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "ReentrancyGuardReentrantCall",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "SafeERC20FailedOperation",
+  "inputs": [
+   {
+    "name": "token",
+    "type": "address",
+    "internalType": "address"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "TickerUnavailable",
+  "inputs": [
+   {
+    "name": "symbol",
+    "type": "string",
+    "internalType": "string"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "TransferAmountMismatch",
+  "inputs": []
+ }
+]

@@ -2,6 +2,8 @@ import type { Address, Hex, PublicClient } from "viem";
 
 export type RpcClient = Pick<PublicClient, "getChainId" | "getBlock" | "getCode" | "readContract" | "getLogs" | "call" | "estimateGas">;
 export interface ContractPin { readonly address: Address; readonly runtimeCodeHash: Hex }
+/** Contract generation of a release. An absent manifest field means the deployed flat-fee release. */
+export type DeploymentGeneration = "flat-fee" | "gen2";
 export interface Deployment {
   readonly schemaVersion: 1;
   readonly releaseId: string;
@@ -12,6 +14,11 @@ export interface Deployment {
   readonly registry: ContractPin;
   readonly quoteToken: ContractPin & { readonly symbol: "USDC" | "Oxy-USDC"; readonly decimals: 6 };
   readonly auctionController: Address;
+  /** Absent: flat-fee. "gen2": exact-duration launches, breadth bid rule and trading gate. */
+  readonly generation?: DeploymentGeneration;
+  /** Informational release status, e.g. "planned-fork-addresses"; runtime pins remain authoritative. */
+  readonly status?: string;
+  readonly note?: string;
 }
 export interface Anchor { readonly blockNumber: bigint; readonly blockHash: Hex; readonly timestamp: bigint }
 export interface Market {

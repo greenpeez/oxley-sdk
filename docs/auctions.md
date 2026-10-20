@@ -1,7 +1,8 @@
 # Auction Transactions
 
-Available since `@oxley/sdk@0.5.0-next.2` via `@oxley/sdk/auctions`; current
-`0.5.0-next.4` also adds the separate [auction launch module](launch.md). ESM, Node 20+,
+Available since `@oxley/sdk@0.5.0-next.2` via `@oxley/sdk/auctions`; `0.5.0-next.4`
+added the separate [auction launch module](launch.md) and `0.6.0-next.0` adds
+[Gen2 bid rules](#gen2-breadth-rule-and-creator-exclusion). ESM, Node 20+,
 TypeScript and browser-compatible. No Oxley backend, API key or signer is required;
 supply a viem public client with sufficient RPC capacity. The module only reads
 chain state, simulates calls and returns unsigned transactions.
@@ -120,6 +121,39 @@ Use the verified client by default. All bid/claim/refund transactions have `valu
 No native-asset bid or refund route, creator-bond withdrawal, generic recipient
 override or signing key is added here. Creator-account setup and auction launch
 helpers are available separately from `@oxley/sdk/launch`.
+
+## Gen2 Breadth Rule And Creator Exclusion
+
+For manifests declaring `"generation": "gen2"` (currently planned fork-rehearsal
+addresses only, `"status": "planned-fork-addresses"`), the validation hook bound to
+the router and adapter (`ElysiumBreadthCcaBidHook`, full ABI at
+`@oxley/sdk/abis/gen2/bid-hook.json`) adds two rules. Router, claim and refund ABIs
+are unchanged.
+
+- Each wallet's committed principal is capped at `walletCap` (10% of the auction's
+  minimum gross raise, rounded up) until the capped commitments reach that minimum;
+  after that there is no per-wallet limit. Committed principal never decreases, so an
+  outbid wallet at the cap cannot bid again until the auction has broad support.
+- The creator account and its initial controller cannot bid (`CreatorBidNotAllowed`).
+
+`getBidAllowance({ dealId, owner })` returns `walletAllowance` (principal, bigint),
+`unlimited` (allowance is `maxUint256`), `walletCap`, `minimumGrossRaise`, `counted`,
+`breadthReached`, `committed`, `creatorExcluded`, `registered` and the `hook` with the
+usual auction and block fields. It checks the hook is bound to the reviewed router.
+On Gen2, `prepareBid` compares the router-quoted **principal** (the 0.1% fee is on
+top) with that allowance and fails closed before any simulation with
+`WALLET_CAP_EXCEEDED` (`details.walletAllowance`), `CREATOR_BID_NOT_ALLOWED` or
+`AUCTION_NOT_REGISTERED`; successful results include `bidAllowance`.
+
+The Gen2 router pre-checks bids, so wallets see `WalletCapExceeded(owner, requested,
+remainingAllowance)`, `CreatorBidNotAllowed(owner)` or `AuctionNotRegistered(auction)`
+directly. `decodeOxleyRevert(error)` decodes these (also inside the CCA's
+`ValidationHookCallFailed`) into `{ name, args, message }`, for example
+"You can bid up to 5050.505051 USDC more until this auction has broad support".
+
+After a successful settlement, the Gen2 curve keeps trading closed until every bid
+is delivered or 10 minutes after activation. Use the trading client's
+`getTradingStatus(marketId)`; quotes and swaps fail closed with `TRADING_NOT_OPEN`.
 
 ## Mainnet
 
