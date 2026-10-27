@@ -4,3 +4,4 @@ export { parseDeployment, deploymentGeneration, OxleyError } from "./validation.
 export { decodeOxleyRevert, type OxleyRevert, type OxleyRevertName } from "./revert.js";
 export { curveAbi, registryAbi, tokenAbi } from "./abis.js";
 export type * from "./types.js";
+export * from "./market-observations.js";

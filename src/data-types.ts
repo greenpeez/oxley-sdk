@@ -1,4 +1,5 @@
 /** Integer base units and fixed-point values are never converted to JS numbers. */
+import type {MarketCapitalization, MarketProtocolObservation} from "./market-observations.js";
 export type DecimalString = string;
 export type DataAddress = `0x${string}`;
 export type DealId = `0x${string}`;
@@ -23,6 +24,16 @@ export interface IndexedData<T> {
   chainId: number;
   releaseId: string;
   sourceReleaseId?: string | null;
+  /** Market deployment identity, distinct from the feed's releaseId; absent when unverified. */
+  deploymentReleaseId?: string;
+  feedIdentity?:{releaseId:string;candidateHash:string;bindingFingerprint:string;reorgGeneration:number};
+  deploymentIdentity?:MarketDeploymentIdentity|null;
+  latestBlock?:DecimalString|null;
+  latestTimestamp?:number|null;
+  finalizedTimestamp?:number;
+  headLagBlocks?:DecimalString|null;
+  finalityLagBlocks?:DecimalString|null;
+  delayReason?:string|null;
   candidateHash: string;
   bindingFingerprint: string;
   generation: number;
@@ -47,6 +58,8 @@ export interface IndexedData<T> {
   items: T[];
 }
 export interface Auction {
+  deploymentIdentity?:MarketDeploymentIdentity|null;
+  capitalization?: MarketCapitalization | null; protocolObservation?: MarketProtocolObservation | null;
   dealId: DealId; mode: "auction"; auction: DataAddress; coin: DataAddress; creator: DataAddress;
   name: string; symbol: string; launchedAt: number; startBlock: number; endBlock: number;
   floorPriceQ96: DecimalString; clearingPriceQ96: DecimalString; checkpointBlock: number | null;
@@ -75,6 +88,8 @@ export type AuctionActivity = AuctionEventBase & (
 );
 export interface AuctionPrice { blockNumber: number; time: number; clearingPriceQ96: DecimalString; cumulativeMps: number }
 export interface IndexedMarket {
+  deploymentIdentity?:MarketDeploymentIdentity|null;
+  capitalization?: MarketCapitalization | null; protocolObservation?: MarketProtocolObservation | null;
   dealId: DealId; mode: "reserve"; coin: DataAddress; creator: DataAddress; name: string; symbol: string;
   launchedAt: number; spotPriceWad: DecimalString; latestTradeAt: number | null;
   quoteAsset: DataAddress; quoteSymbol: "USDC" | "Oxy-USDC";
@@ -94,4 +109,11 @@ export interface CandleSeries {
 export interface MarketVolume {
   dealId: DealId; asOf: number; volume24hQuoteUnits: DecimalString;
   previous24hQuoteUnits: DecimalString; volume1hQuoteUnits: DecimalString; lastTradeAt: number | null;
+}
+
+export interface MarketDeploymentIdentity {
+  chainId:number;source:"canonical-launch"|"verified-binding";releaseId:string|null;
+  observedBlock:DecimalString;observedBlockHash:string;
+  controller:{address:DataAddress;runtimeCodeHash:string};adapter?:{address:DataAddress;runtimeCodeHash:string};
+  curve:{address:DataAddress;runtimeCodeHash:string};quote:{address:DataAddress;runtimeCodeHash:string};
 }

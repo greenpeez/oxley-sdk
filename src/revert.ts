@@ -28,13 +28,13 @@ function candidates(value: unknown, out: Hex[], depth = 0): Hex[] {
   }
   return out;
 }
-function decode(data: Hex, symbol: string, depth: number): OxleyRevert | null {
-  let result;
-  try { result = decodeErrorResult({ abi: oxleyRevertAbi, data }); } catch { return null; }
+function decodeResult(data: Hex) {
+  try { return decodeErrorResult({ abi: oxleyRevertAbi, data }); } catch { return null; }
+}
+function explainRevert(result: NonNullable<ReturnType<typeof decodeResult>>, symbol: string): OxleyRevert | null {
   const args = Object.freeze([...result.args ?? []]);
   let message: string;
   switch (result.errorName) {
-    case "ValidationHookCallFailed": return depth < 2 ? decode(result.args[0], symbol, depth + 1) : null;
     case "WalletCapExceeded": message = walletCapMessage(result.args[2], symbol); break;
     case "CreatorBidNotAllowed": message = "Creators can't bid on their own auction"; break;
     case "AuctionNotRegistered": message = "This auction is not registered with the bid rules and cannot accept bids"; break;
@@ -47,7 +47,14 @@ function decode(data: Hex, symbol: string, depth: number): OxleyRevert | null {
   }
   return Object.freeze({ name: result.errorName, args, message });
 }
-
+function decode(data: Hex, symbol: string, depth: number): OxleyRevert | null {
+  const result = decodeResult(data);
+  if (!result) return null;
+  if (result.errorName === "ValidationHookCallFailed") {
+    return depth < 2 ? decode(result.args[0], symbol, depth + 1) : null;
+  }
+  return explainRevert(result, symbol);
+}
 /**
  * Pure decoder for Gen2 auction/curve reverts. Accepts raw revert data or a viem/EIP-1193 error object
  * and returns null for anything else (including unrelated custom errors). Never performs RPC calls.

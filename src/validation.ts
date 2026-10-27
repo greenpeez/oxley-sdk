@@ -23,6 +23,12 @@ export function uint(value: unknown, positive = true): asserts value is bigint {
   check(typeof value === "bigint" && value >= (positive ? 1n : 0n) && value <= maxUint256,
     "INVALID_AMOUNT", "Amounts must be bigint uint256 base units");
 }
+function deploymentMetadata(d: Deployment): void {
+  check(d.generation === undefined || d.generation === "flat-fee" || d.generation === "gen2",
+    "INVALID_GENERATION", "generation must be omitted, \"flat-fee\" or \"gen2\"");
+  for (const text of [d.status, d.note]) check(text === undefined || (typeof text === "string" && text.length > 0),
+    "INVALID_DEPLOYMENT", "status and note must be non-empty strings when present");
+}
 function deploymentHeader(input: unknown): Deployment {
   check(!!input && typeof input === "object", "INVALID_DEPLOYMENT", "Deployment manifest required");
   const d = input as Deployment;
@@ -32,10 +38,7 @@ function deploymentHeader(input: unknown): Deployment {
   check(d.network === "testnet" || d.network === "mainnet", "INVALID_NETWORK", "Explicit network required");
   check(typeof d.startBlock === "string" && /^(0|[1-9][0-9]*)$/.test(d.startBlock),
     "INVALID_START_BLOCK", "startBlock must be a decimal block number");
-  check(d.generation === undefined || d.generation === "flat-fee" || d.generation === "gen2",
-    "INVALID_GENERATION", "generation must be omitted, \"flat-fee\" or \"gen2\"");
-  for (const text of [d.status, d.note]) check(text === undefined || (typeof text === "string" && text.length > 0),
-    "INVALID_DEPLOYMENT", "status and note must be non-empty strings when present");
+  deploymentMetadata(d);
   return d;
 }
 /** Flat-fee unless the manifest explicitly declares another generation. */
