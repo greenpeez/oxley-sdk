@@ -5,6 +5,8 @@ import { createOxleyAuctionClient, type AuctionBidInput, type PartialFillHints }
 export function auctionIntegration(publicClient: PublicClient, deployment: unknown) {
   const auctions = createOxleyAuctionClient({ publicClient, deployment });
   return {
+    // Gen2 manifests only: remaining principal under the per-wallet cap (unlimited once broad support exists).
+    allowance: (dealId: Hex, owner: Address) => auctions.getBidAllowance({ dealId, owner }),
     // Show principal/fee/debit and confirm approvals before requesting the simulated bid.
     previewBid: (input: AuctionBidInput, caller: Address) => auctions.prepareBid({ ...input, caller }),
     readyBid: (input: AuctionBidInput, caller: Address) => auctions.prepareBid({ ...input, caller, simulate: true }),

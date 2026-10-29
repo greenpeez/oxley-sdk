@@ -5,6 +5,20 @@ surface, not whole-repository acceptance or a new contract security audit.
 
 ## Current Evidence
 
+- Current markets, terms, integrator fees and Gen8 Dynamic Bids (`0.6.0-next.1`, 2026-10-29): 129 unit/ABI
+  tests, the 17 local EVM tests, typecheck, build and the clean-archive consumer check pass. New offline suites cover
+  per-generation resolution, quotes and calldata against the full compiled ABIs, terms, the opening-surcharge mirror,
+  fee batches (ordering, rounding, caps, tamper and staleness checks) and Dynamic Bids against a modelled hook and CCA.
+  `npm run test:live:markets` (read-only, no signer) verified every pin of the flat-fee, Gen3 and Gen8 manifests, the
+  Gen8 auction graph and the hook's compiled rules, resolved live flat-fee and Gen3 markets, quoted and prepared and
+  checked fee-bearing buys and sells, read terms state (nothing enforced yet) and matched the surcharge mirror to both
+  curves. No Gen8 market exists yet, so Dynamic Bid preparation has no live counterpart. Sources and hashes:
+  [live-artifacts.json](live-artifacts.json). No funded transaction was sent.
+- Gen2 support (`0.6.0-next.0`, 2026-10-20, offline only): 54 unit/ABI tests
+  pass, including 14 Gen2 tests with mocked RPC fixtures; Gen2 ABIs are pinned by
+  sha256 and source commit in [gen2-artifacts.json](gen2-artifacts.json). The Gen2
+  manifest holds planned fork-rehearsal addresses, so no Gen2 testnet read, local
+  EVM or funded check has been run against these SDK paths yet.
 - [Auction launch validation](launch-validation.md): `0.5.0-next.4` adds unsigned
   launch preparation, creator-account ABIs and restart recovery. All 40 unit
   tests and 17 local EVM tests pass; read-only testnet checks verify launch pins,

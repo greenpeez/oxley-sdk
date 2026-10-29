@@ -17,7 +17,7 @@ const point = { time: now - 60, openWad: huge, highWad: huge, lowWad: huge, clos
 function wire(resource: string, items: unknown[] = [], extra: Record<string, unknown> = {}) {
   return { apiVersion: "1", source: "indexed", resource, chainId: 99801, releaseId: "example",
     candidateHash: hash, bindingFingerprint: hash, generation: 0, indexedBlock: "100", indexedBlockHash: hash,
-    checkedAt: now, freshness: "fresh", quoteToken: { address, symbol: "Oxy-USDC", decimals: 6 },
+    checkedAt: now, indexedTimestamp:now,latestBlock:"102",latestTimestamp:now,finalizedBlock:"100",lagBlocks:"0", freshness: "fresh", quoteToken: { address, symbol: "Oxy-USDC", decimals: 6 },
     hasMore: false, nextCursor: null, items, ...extra };
 }
 function client(transport: typeof fetch) {
@@ -69,7 +69,8 @@ test("data client distinguishes delayed prefixes from expired observations", asy
   const delayed = wire("markets", [], { freshness: "stale", readState: "complete-prefix", finalizedBlock: "110", lagBlocks: "10" });
   const page = await client(async () => Response.json(delayed)).markets();
   assert.equal(isCurrentData(page), false);
-  assert.equal(isCurrentData({ checkedAt: now, freshness: "fresh" }), true);
+  assert.equal(isCurrentData({ checkedAt: now, freshness: "fresh" }), false);
+  assert.equal(isCurrentData({...wire("markets"),freshness:"fresh"} as never),true);
   assert.equal(isCurrentData({ checkedAt: now, freshness: "fresh" }, (now + 181) * 1000), false);
   for (const change of [{ checkedAt: now - 181 }, { checkedAt: now + 31 }])
     await assert.rejects(client(async () => Response.json({ ...delayed, ...change })).markets(), error("STALE_OBSERVATION"));
@@ -119,4 +120,39 @@ test("data client handles cancellation timeouts malformed responses and secure U
 test("data client does not silently accept preview payloads or invalid pagination", async () => {
   for (const patch of [{ source: "preview" }, { hasMore: true, nextCursor: null }, { hasMore: undefined, nextCursor: undefined }, { snapshotBlock: "101" }])
     await assert.rejects(client(async () => Response.json(wire("markets", [], patch))).markets(), error("INVALID_RESPONSE"));
+});
+
+
+test("current data rejects an old zero-lag finalized prefix and incomplete freshness evidence",()=>{
+  assert.equal(isCurrentData({checkedAt:now,freshness:"fresh"},now*1000),false);
+  assert.equal(isCurrentData({...wire("markets"),indexedTimestamp:now-1003} as never,now*1000),false);
+  assert.equal(isCurrentData({...wire("markets"),latestBlock:null} as never,now*1000),false);
+  assert.equal(isCurrentData({...wire("markets"),lagBlocks:"1"} as never,now*1000),false);
+});
+test("platform challenges preserve their identity for JSON and HTML without bypassing protection",async()=>{
+  for(const body of [JSON.stringify({error:{code:"challenge"}}),"<html>challenge</html>"]) {
+    const sdk=client(async()=>new Response(body,{status:403,headers:{"x-vercel-mitigated":"challenge","retry-after":"30"}}));
+    await assert.rejects(sdk.markets(),(e:unknown)=>e instanceof DataApiError&&e.code==="PLATFORM_CHALLENGE"&&e.retryAfterMs===30_000);
+  }
+});
+
+test("data reads work without AbortSignal static helpers and release their caller listener",async()=>{
+  const any=Object.getOwnPropertyDescriptor(AbortSignal,"any")!,timeout=Object.getOwnPropertyDescriptor(AbortSignal,"timeout")!;
+  Object.defineProperty(AbortSignal,"any",{configurable:true,value:undefined});
+  Object.defineProperty(AbortSignal,"timeout",{configurable:true,value:undefined});
+  const caller=new AbortController();let observed:AbortSignal|undefined;
+  try {
+    const sdk=client(async(_,init)=>{observed=init?.signal??undefined;return Response.json(wire("markets"));});
+    assert.equal((await sdk.markets({}, {signal:caller.signal})).resource,"markets");
+    caller.abort("navigation");assert.equal(observed?.aborted,false,"completed reads release their caller listener");
+  }finally{Object.defineProperty(AbortSignal,"any",any);Object.defineProperty(AbortSignal,"timeout",timeout);}
+});
+
+test("data read deadlines fence transports that return after cancellation",async()=>{
+  const caller=new AbortController();
+  const late=async()=>{await new Promise(resolve=>setTimeout(resolve,25));return Response.json(wire("markets"));};
+  const sdk=createOxleyDataClient({baseUrl:"http://localhost/api/data/v1",chainId:99801,timeoutMs:5,fetch:late});
+  await assert.rejects(sdk.markets(),error("TIMEOUT"));
+  const pending=client(late).markets({}, {signal:caller.signal});caller.abort("navigation");
+  await assert.rejects(pending,error("ABORTED"));
 });

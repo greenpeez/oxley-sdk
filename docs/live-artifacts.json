@@ -1,0 +1,80 @@
+{
+  "checkedAt": "2026-10-29",
+  "chainId": 99801,
+  "sourceRepository": {
+    "worktree": "oxley-consolidation-20261019/wt-p2",
+    "commit": "3224cc1322e37edaecd92037a0826ddc3ad0d448",
+    "note": "The Gen8 hook, exposure helper and router sources that were deployed are uncommitted working-tree files at that commit; their sha256 is recorded below."
+  },
+  "deployments": [
+    {
+      "file": "deployments/elysium-testnet-gen3.json",
+      "sourcePath": "gen3-live-20261021/sdk-deployment.json",
+      "sourceSha256": "0be0dc1b224112243309094730b7fc7fe5babdc49e1d3f11e7be7d3c9edc668a",
+      "addedFields": [
+        "generation",
+        "status",
+        "termsRegistry"
+      ]
+    },
+    {
+      "file": "deployments/elysium-testnet-gen8.json",
+      "sourcePath": "gen8-live-20261029/gen8-deployment.json",
+      "sourceSha256": "e1d46ed2c5f257483c2a4822e1c0cc1968f61861be81145484c20625752398b9",
+      "schemaVersion": 3,
+      "mapping": "roles curve, registry, quoteToken, controller, termsRegistry, bidRouter, adapter, bidHook and exposureHelper; bidRules verbatim"
+    }
+  ],
+  "evidence": [
+    {
+      "name": "ElysiumReserveCurveGen3",
+      "role": "gen3Curve",
+      "export": "@oxley/sdk/abis/gen3/curve.json",
+      "sourcePath": "contracts/v2/abis/ElysiumReserveCurveGen3.json",
+      "sourceSha256": "132fe49e63e1f7653a8cf08d5b9977546a089b7624af1025b02d7cad368748f1",
+      "abiSha256": "132fe49e63e1f7653a8cf08d5b9977546a089b7624af1025b02d7cad368748f1",
+      "solidityPath": "packages/elysium-contracts-vnext/src/gen3/ElysiumReserveCurveGen3.sol",
+      "soliditySha256": "04e23265c7074329d71d8640e054e49dac1dc5d01d9b5a3bb570aa8166055df7"
+    },
+    {
+      "name": "OxleyTermsRegistry",
+      "role": "termsRegistry",
+      "export": "@oxley/sdk/abis/terms-registry.json",
+      "sourcePath": "contracts/v2/abis/OxleyTermsRegistry.json",
+      "sourceSha256": "85316b6b35e0312531c3ca0ffa0ec72ac6e37338deaa30bc6de33af10b865e08",
+      "abiSha256": "85316b6b35e0312531c3ca0ffa0ec72ac6e37338deaa30bc6de33af10b865e08",
+      "solidityPath": "packages/elysium-contracts-vnext/src/gen3/OxleyTermsRegistry.sol",
+      "soliditySha256": "8cd4afd657184e462b6a3fbcb071de25f29b3d0d29d765018faae7bea3a5a779"
+    },
+    {
+      "name": "ElysiumCurveGen8",
+      "role": "gen8Curve",
+      "export": "@oxley/sdk/abis/gen8/curve.json",
+      "sourcePath": ".tooling/verification/gen8-ast/out/ElysiumCurveGen8.sol/ElysiumCurveGen8.json",
+      "sourceSha256": "17b0cf8248897dc8c4ea03f231b90e626ea1834c46c92b0a656ce0f6875dccac",
+      "abiSha256": "e9d3a98168396285fb102b3f370fedf0e858e2762d3963c152f076a22c813f0b",
+      "solidityPath": "packages/elysium-contracts-vnext/src/gen8/ElysiumCurveGen8.sol",
+      "soliditySha256": "331b3cd0b4b16512a701d2cf7337eadeb7915fa3defe8b599164428d286c141c"
+    },
+    {
+      "name": "ElysiumCcaBidRouterGen8",
+      "role": "gen8BidRouter",
+      "export": "@oxley/sdk/abis/gen8/bid-router.json",
+      "sourcePath": ".tooling/verification/gen8-ast/out/ElysiumCcaBidRouterGen8.sol/ElysiumCcaBidRouterGen8.json",
+      "sourceSha256": "d98b63c5bfe5ae70d0f3b9fc80a09b33058a5189bcbe943a7a0f8596556a1b4c",
+      "abiSha256": "47bd81107d4100bc1d3e377c3183682ff3525a70bb5c56841054aec15aae56d3",
+      "solidityPath": "packages/elysium-contracts-vnext/src/gen8/ElysiumCcaBidRouterGen8.sol",
+      "soliditySha256": "4370536e176788a909a47ee5118a278cf0bdccb63c4e478aec2ba0d136d5da9e"
+    },
+    {
+      "name": "ElysiumDynamicBidHookGen8",
+      "role": "gen8BidHook",
+      "export": "@oxley/sdk/abis/gen8/bid-hook.json",
+      "sourcePath": ".tooling/verification/gen8-ast/out/ElysiumDynamicBidHookGen8.sol/ElysiumDynamicBidHookGen8.json",
+      "sourceSha256": "23cf849a80d15f32e811a2fd9cb557b5855680fed613ce6a9ebbb26e09cb7f00",
+      "abiSha256": "dc90b3fd4c3c5790bb96d4b8c09c229965d9d15c3423b198d1c7ce0627057f4a",
+      "solidityPath": "packages/elysium-contracts-vnext/src/gen8/ElysiumDynamicBidHookGen8.sol",
+      "soliditySha256": "06eb95944f56358ad9f75dabbc2d25c9320384af5a613a3d1d50bf94ccbc4873"
+    }
+  ]
+}

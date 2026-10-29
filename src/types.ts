@@ -2,6 +2,11 @@ import type { Address, Hex, PublicClient } from "viem";
 
 export type RpcClient = Pick<PublicClient, "getChainId" | "getBlock" | "getCode" | "readContract" | "getLogs" | "call" | "estimateGas">;
 export interface ContractPin { readonly address: Address; readonly runtimeCodeHash: Hex }
+/**
+ * Contract generation of a release. An absent manifest field means the deployed flat-fee release. Gen3 and Gen8 curves also
+ * require the caller to have accepted the terms in the bound terms registry; Gen8 is the quote-only curve with Dynamic Bids.
+ */
+export type DeploymentGeneration = "flat-fee" | "gen2" | "gen3" | "gen8";
 export interface Deployment {
   readonly schemaVersion: 1;
   readonly releaseId: string;
@@ -12,6 +17,13 @@ export interface Deployment {
   readonly registry: ContractPin;
   readonly quoteToken: ContractPin & { readonly symbol: "USDC" | "Oxy-USDC"; readonly decimals: 6 };
   readonly auctionController: Address;
+  /** Absent: flat-fee. "gen2": exact-duration launches, breadth bid rule and trading gate. "gen3"/"gen8": terms-gated curves. */
+  readonly generation?: DeploymentGeneration;
+  /** Required exactly for "gen3" and "gen8": the end-user terms registry the curve (and the Gen8 bid hook) enforces. */
+  readonly termsRegistry?: ContractPin;
+  /** Informational release status, e.g. "planned-fork-addresses"; runtime pins remain authoritative. */
+  readonly status?: string;
+  readonly note?: string;
 }
 export interface Anchor { readonly blockNumber: bigint; readonly blockHash: Hex; readonly timestamp: bigint }
 export interface Market {
@@ -22,6 +34,8 @@ export interface Market {
   readonly activatedAt: bigint;
   readonly quoteToken: Address;
   readonly curve: Address;
+  /** Contract generation of the curve that holds the market; absent on hand-built markets, which mean flat-fee. */
+  readonly generation?: DeploymentGeneration;
 }
 export interface QuoteRequest {
   marketId: Hex;
@@ -45,6 +59,11 @@ export interface Quote extends Anchor {
   /** Fee is always in quote-token base units, including sells. */
   readonly feeAmount: bigint;
   readonly feeToken: Address;
+  /**
+   * Gen3/Gen8 buys: the decaying opening surcharge rate (WAD, 1e18 = 100%) the curve applied at the quote block; it is already
+   * inside `feeAmount`. Execution happens later, so the charged rate can only be lower. Absent for other quotes.
+   */
+  readonly openingSurchargeWad?: bigint;
 }
 export interface Transaction {
   readonly chainId: number;

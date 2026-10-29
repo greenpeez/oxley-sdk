@@ -1,7 +1,7 @@
 {
   "name": "@oxley/sdk",
-  "version": "0.5.0-next.4",
-  "description": "Oxley market data, quotes, swaps and unsigned auction launch, bid, claim and refund transactions",
+  "version": "0.6.0-next.1",
+  "description": "Oxley market data, quotes, swaps (with optional integrator fees), terms and unsigned auction launch, bid, claim and refund transactions across the flat-fee, Gen3 and Gen8 generations",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -51,7 +51,22 @@
     "./abis/cca-auction.json": "./abis/ContinuousClearingAuction.json",
     "./abis/curve.json": "./abis/ElysiumReserveCurveVNext.json",
     "./abis/registry.json": "./abis/ElysiumDealRegistry.json",
+    "./abis/gen2/auction-controller.json": "./abis/ElysiumBondedCcaLaunchControllerGen2.json",
+    "./abis/gen2/creator-account.json": "./abis/ElysiumCreatorAccountGen2.json",
+    "./abis/gen2/creator-account-factory.json": "./abis/ElysiumCreatorAccountFactoryGen2.json",
+    "./abis/gen2/bid-router.json": "./abis/ElysiumCcaBidRouterGen2.json",
+    "./abis/gen2/bid-hook.json": "./abis/ElysiumBreadthCcaBidHook.json",
+    "./abis/gen2/adapter.json": "./abis/ElysiumUniswapCcaAdapterGen2.json",
+    "./abis/gen2/curve.json": "./abis/ElysiumReserveCurveGen2.json",
+    "./abis/gen3/curve.json": "./abis/ElysiumReserveCurveGen3.json",
+    "./abis/terms-registry.json": "./abis/OxleyTermsRegistry.json",
+    "./abis/gen8/curve.json": "./abis/ElysiumCurveGen8.json",
+    "./abis/gen8/bid-router.json": "./abis/ElysiumCcaBidRouterGen8.json",
+    "./abis/gen8/bid-hook.json": "./abis/ElysiumDynamicBidHookGen8.json",
     "./deployments/elysium-testnet.json": "./deployments/elysium-testnet.json",
+    "./deployments/elysium-testnet-gen2.json": "./deployments/elysium-testnet-gen2.json",
+    "./deployments/elysium-testnet-gen3.json": "./deployments/elysium-testnet-gen3.json",
+    "./deployments/elysium-testnet-gen8.json": "./deployments/elysium-testnet-gen8.json",
     "./deployments/mainnet.template.json": "./deployments/mainnet.template.json"
   },
   "files": [
@@ -79,6 +94,8 @@
     "test:live": "node --import tsx scripts/check-testnet.ts",
     "test:live:auctions": "node --import tsx scripts/check-auctions-testnet.ts",
     "test:live:launch": "node --import tsx scripts/check-launch-testnet.ts",
+    "test:live:markets": "node --import tsx scripts/check-markets-testnet.ts",
+    "embed": "node scripts/embed-deployments.mjs",
     "prepack": "npm run build"
   },
   "dependencies": {

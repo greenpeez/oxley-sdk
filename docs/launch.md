@@ -54,7 +54,7 @@ pacing. Do not treat an RPC error as permission to fall back to unverified calld
 | `setup` | Factory `createAccount(dealId, owner)` | `0` |
 | `reset` | Quote token `approve(creatorAccount, 0)` when allowance is nonzero but insufficient | `0` |
 | `approve` | Quote token `approve(creatorAccount, exactLaunchFee)` | `0` |
-| `launch` | Creator account `launchAuctionWithCommitmentAndDuration(...)` | Exact operating bond |
+| `launch` | Creator account `launchAuctionWithCommitmentAndDuration(...)` (Gen2: `...AndExactDuration`) | Exact operating bond |
 | `complete` | None; returns existing creator account, coin and auction | No transaction |
 
 The fee spender and launch target are the **creator account**, not the controller
@@ -99,6 +99,42 @@ estimation. The launch step also checks the escrow's `MAX_GAS_PRICE` (currently
 1 gwei). Preserve that field when sending; do not replace it with wallet-default
 fee settings. If network fees exceed the cap, wait and re-prepare. The offline
 encoders do not supply gas pricing.
+
+## Gen2 Exact Duration
+
+Available from `0.6.0-next.0` for manifests declaring `"generation": "gen2"`
+(for example `@oxley/sdk/deployments/elysium-testnet-gen2.json`, which currently
+holds **planned fork-rehearsal addresses**, `"status": "planned-fork-addresses"`;
+verification fails closed until a live deploy replaces it). Gen2 creator accounts
+reject the hours-only method with `ExactDurationRequired()`, so the launch step
+encodes `launchAuctionWithCommitmentAndExactDuration(name, symbol, floor, lockDays,
+commitmentBps, requestedHours, durationBlocks)`. Stages, fee, bond and recovery are
+unchanged.
+
+- `auctionDurationBounds(hours)` returns `{ minimumBlocks: hours x 14,400,
+  maximumBlocks: hours x 36,000 }` (0.25 s to 0.10 s per block), the controller's
+  `durationBounds(uint8)`.
+- `auctionDurationBlocks({ hours, secondsPerBlock })` returns
+  `round(hours x 3600 / secondsPerBlock)` and throws `INVALID_DURATION_BLOCKS` when
+  the observed rate is outside 0.10-0.25 s. Example: 0.1363 s/block gives 26,412
+  blocks for one hour; 0.1408 s/block gives 25,568.
+- `sampleSecondsPerBlock(publicClient, { blocks?, notBefore?, blockNumber? })`
+  measures `(ts(head) - ts(head - N)) / N`, N = 20,000 by default.
+- `prepareLaunch` samples N blocks ending at its observation block, never before the
+  manifest's `startBlock` (shorter history is used down to 1,000 blocks; below that
+  it throws `INSUFFICIENT_BLOCK_HISTORY`). It checks the result against on-chain
+  `durationBounds(hours)` (`DURATION_BOUNDS_MISMATCH` otherwise) and returns
+  `requestedHours`, `durationBlocks`, `durationBounds`, `secondsPerBlock`,
+  `rateSample` and `estimatedEndTimestamp` (observation time + blocks x rate; the
+  authoritative end is the CCA `endBlock`).
+- Optional intent fields: `secondsPerBlock` (skip sampling) or `durationBlocks`
+  (explicit length within the bounds; takes precedence). For flat-fee manifests
+  both are rejected with `EXACT_DURATION_UNSUPPORTED`; that path is unchanged.
+- A completed Gen2 launch also returns the controller's `schedule`
+  (`requestedHours`, `durationBlocks`, `targetEndTimestamp`).
+- `buildAuctionLaunch` for Gen2 requires `secondsPerBlock` or `durationBlocks`
+  (`DURATION_BLOCKS_REQUIRED`). `decodeOxleyRevert` turns `ExactDurationRequired`,
+  `InvalidDurationBlocks` and `InvalidRequestedHours` reverts into short messages.
 
 ## Verification And Boundaries
 

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "elysium-auctions-gen2-811dae2fb61db8fb",
+  "generation": "gen2",
+  "status": "planned-fork-addresses",
+  "note": "Planned Gen2 addresses from the 2026-10-20 local fork rehearsal (fork block 12021446, deployer nonce 3779). They were not deployed on the live chain when this file was written; runtime-hash verification fails closed until they are. A live Gen2 deploy replaces this file with its real addresses, runtime hashes and startBlock.",
+  "chainId": 99801,
+  "network": "testnet",
+  "startBlock": "12021447",
+  "curve": {
+    "address": "0xa8c8de18f27212ab7363674ce928c2ffbecf79fd",
+    "runtimeCodeHash": "0xf7a4a592d4973de94a6193984667d5745fab7c92ecf24fc355d9b4e00636d3b2"
+  },
+  "registry": {
+    "address": "0x8993234a648b0b3469f1799f7b3796409f0b91e4",
+    "runtimeCodeHash": "0x7e5cb733599853114989ca57a435d21a06db5389a8850e5c333e003f8c74c741"
+  },
+  "quoteToken": {
+    "address": "0xa4ce6e6c719f7fb524230c367948039b078683e4",
+    "runtimeCodeHash": "0x39aacdb7a8321713594376632f885dac463b2a445d211cf182ea0edc4a3e146f",
+    "symbol": "Oxy-USDC",
+    "decimals": 6
+  },
+  "auctionController": "0xbdd40985a269391597e1f4b6fa38658dc8d12b14",
+  "launchBindings": {
+    "creatorAccountFactory": {
+      "address": "0xca86a1fba9acfcd0eb5a1bd6bcdcf79730c03f9a",
+      "runtimeCodeHash": "0xd05c2d3e3c044bce55e27d05153f8ae0d9df93afb46ead88cead528ba69674a7"
+    },
+    "entryController": {
+      "address": "0x3e3b869294727318e371df462f7acd6ca15d6953",
+      "runtimeCodeHash": "0x3aade113b66884cd6290b0f648c2b00bb211444e178a9279d712ecb9d8b1831d"
+    },
+    "bondEscrow": {
+      "address": "0x2804b099fb367f39f3aee5913af954f0251eb308",
+      "runtimeCodeHash": "0x0e24461b721f68c5f3847ce84d16887c75c82e6afb152a48b825a6355878437d"
+    },
+    "launchFeeBaseUnits": "1500000",
+    "deployerBondWei": "500000000000000000"
+  },
+  "auctionBindings": {
+    "controllerRuntimeCodeHash": "0x0a95930dccf9ba2b1696674b38f971892d6ffe54ea3d2f0898282e9a66253445",
+    "bidRouter": {
+      "address": "0x3166c737da566e0ad1a967f631cf0a40d4ba07d6",
+      "runtimeCodeHash": "0x51fabd56d9de28b91bdc9d0e78a8f12989c573b426c5857ae7c3282969602af9"
+    },
+    "adapter": {
+      "address": "0xfb7634e788cc6b31423a74cab1dcf6e5ebd7d10a",
+      "runtimeCodeHash": "0x552e8da9e30a3dbb190232152a00e14c04e8437d1cbaa514f825b4fad2b06819"
+    }
+  }
+}

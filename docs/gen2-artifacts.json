@@ -1,0 +1,95 @@
+{
+  "generation": "gen2",
+  "releaseId": "elysium-auctions-gen2-811dae2fb61db8fb",
+  "status": "planned-fork-addresses",
+  "sourceBranch": "feat/next-generation-20261020",
+  "sourceCommit": "4cf4da65684ca8052b9f6f1bd67566f49ea6463d",
+  "specification": {
+    "sourcePath": "packages/elysium-contracts-vnext/GEN2.md",
+    "abiDiff": "packages/elysium-contracts-vnext/deployment/gen2/abi-diff-gen2.json"
+  },
+  "deployment": {
+    "file": "deployments/elysium-testnet-gen2.json",
+    "sourcePath": "packages/elysium-contracts-vnext/deployment/gen2/fork-20261020/sdk-deployment.json",
+    "sourceSha256": "23bb7564d70552f991a6887c83732177dc9ee6cbcee19d7e04caa791094f0228",
+    "manifestSourcePath": "packages/elysium-contracts-vnext/deployment/gen2/fork-20261020/manifest.json",
+    "manifestSha256": "fefa6c6c0cf2e682fa3e58f6262e63548680586c4705113caf78c452b9178d5f",
+    "addedFields": [
+      "generation",
+      "status",
+      "note"
+    ]
+  },
+  "evidence": [
+    {
+      "name": "ElysiumBondedCcaLaunchControllerGen2",
+      "role": "auctionController",
+      "flatFee": "ElysiumBondedCcaLaunchControllerVNext",
+      "export": "@oxley/sdk/abis/gen2/auction-controller.json",
+      "sourcePath": "packages/elysium-contracts-vnext/deployment/gen2/abis/ElysiumBondedCcaLaunchControllerGen2.json",
+      "sourceCommit": "4cf4da65684ca8052b9f6f1bd67566f49ea6463d",
+      "sourceGitBlob": "528a5e8c7d683fbc4b7feeb2e8c4dccbe743c8b1",
+      "abiSha256": "b954e6fb5356248ca58bb6913dcbc7d0a555ab7d14d977c4f85555fe709a4db0"
+    },
+    {
+      "name": "ElysiumCreatorAccountGen2",
+      "role": "creatorAccount",
+      "flatFee": "ElysiumCreatorAccount",
+      "export": "@oxley/sdk/abis/gen2/creator-account.json",
+      "sourcePath": "packages/elysium-contracts-vnext/deployment/gen2/abis/ElysiumCreatorAccountGen2.json",
+      "sourceCommit": "4cf4da65684ca8052b9f6f1bd67566f49ea6463d",
+      "sourceGitBlob": "c74e83716a6e67b10eff2cd91cd5ccd8d7afbf2b",
+      "abiSha256": "7ee443858105b1a5b1a10c0db286ff0fc73b351d50bba6aebc1586234655a61c"
+    },
+    {
+      "name": "ElysiumCreatorAccountFactoryGen2",
+      "role": "creatorAccountFactory",
+      "flatFee": "ElysiumCreatorAccountFactory",
+      "export": "@oxley/sdk/abis/gen2/creator-account-factory.json",
+      "sourcePath": "packages/elysium-contracts-vnext/deployment/gen2/abis/ElysiumCreatorAccountFactoryGen2.json",
+      "sourceCommit": "4cf4da65684ca8052b9f6f1bd67566f49ea6463d",
+      "sourceGitBlob": "f50ecedca109ccef48ee2fef58b1ea3461455734",
+      "abiSha256": "caa39ffe738867552a6cedfa31a40c569bda06ae517b14970d7fb2e429510805"
+    },
+    {
+      "name": "ElysiumCcaBidRouterGen2",
+      "role": "bidRouter",
+      "flatFee": "ElysiumCcaBidRouterVNext",
+      "export": "@oxley/sdk/abis/gen2/bid-router.json",
+      "sourcePath": "packages/elysium-contracts-vnext/deployment/gen2/abis/ElysiumCcaBidRouterGen2.json",
+      "sourceCommit": "4cf4da65684ca8052b9f6f1bd67566f49ea6463d",
+      "sourceGitBlob": "f1a4fb8c474b21a6c169309f82e866f76e875bc8",
+      "abiSha256": "a1703f908c4c3bb2d8f5a52c0693e169f9ba5d0e89375b1b8a7c07791ce659cd"
+    },
+    {
+      "name": "ElysiumBreadthCcaBidHook",
+      "role": "bidHook",
+      "flatFee": "ElysiumFeeAwareCcaBidHook",
+      "export": "@oxley/sdk/abis/gen2/bid-hook.json",
+      "sourcePath": "packages/elysium-contracts-vnext/deployment/gen2/abis/ElysiumBreadthCcaBidHook.json",
+      "sourceCommit": "4cf4da65684ca8052b9f6f1bd67566f49ea6463d",
+      "sourceGitBlob": "3bd55ac42d50916cc5cd0b2ec57265e64679bf8c",
+      "abiSha256": "3a202cdab638b9adec7b620c2ab71745158063f6a0ad0cf5abb868111ada9221"
+    },
+    {
+      "name": "ElysiumUniswapCcaAdapterGen2",
+      "role": "ccaAdapter",
+      "flatFee": "ElysiumUniswapCcaAdapter",
+      "export": "@oxley/sdk/abis/gen2/adapter.json",
+      "sourcePath": "packages/elysium-contracts-vnext/deployment/gen2/abis/ElysiumUniswapCcaAdapterGen2.json",
+      "sourceCommit": "4cf4da65684ca8052b9f6f1bd67566f49ea6463d",
+      "sourceGitBlob": "73e7c61ca69eb47fce7383e5fc8d58148049de39",
+      "abiSha256": "d7c47ae7ca7a7cdbfe789726ab3b3ef543626aa0f86be588cfea82b6b8486fc2"
+    },
+    {
+      "name": "ElysiumReserveCurveGen2",
+      "role": "curve",
+      "flatFee": "ElysiumReserveCurveVNext",
+      "export": "@oxley/sdk/abis/gen2/curve.json",
+      "sourcePath": "packages/elysium-contracts-vnext/deployment/gen2/abis/ElysiumReserveCurveGen2.json",
+      "sourceCommit": "4cf4da65684ca8052b9f6f1bd67566f49ea6463d",
+      "sourceGitBlob": "7207e3fb584b629b89deb0dd5d5f6807af1ac0c4",
+      "abiSha256": "25969ac24778514fae107b20225ef90c7dbf3a29bab12fa0683babcad13528c0"
+    }
+  ]
+}

@@ -59,3 +59,13 @@ Native HYPE remains operating gas paid by the relevant transaction submitter.
 Auction creators also fund the existing native operating bond, with unused-bond
 ownership and return rules preserved.
 It is not an alternative bid/trade payment asset or an SDK sponsorship budget.
+
+## Newer Generations
+
+A mainnet release on a newer curve additionally needs `generation` (`"gen3"` or `"gen8"`) and a
+`termsRegistry` pin (address and runtime hash) in the manifest; `parseDeployment` requires the pin
+for exactly those generations and checks the curve is bound to it. A Gen8 auction manifest also
+needs `auctionBindings.bidHook` and `exposureHelper` pins and the exact `bidRules` record (see
+`deployments/elysium-testnet-gen8.json`). `createOxleyMarkets({ deployments })` accepts the reviewed
+mainnet manifests in place of the bundled testnet set; it never mixes chains.
+

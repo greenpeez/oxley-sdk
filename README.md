@@ -10,7 +10,7 @@ accessor, or Uniswap v4 hook. Providers keep their usual funding,
 transaction submission and final-recipient settlement. Fees are enforced by the
 contracts even when the SDK is bypassed.
 
-This repository contains the **Elysium SDK**, version `0.5.0-next.4`, as ESM with
+This repository contains the **Elysium SDK**, version `0.6.0-next.1`, as ESM with
 TypeScript declarations. It is a different API from the legacy `@oxley/sdk`
 `0.4.1` release. The Elysium release is the default `latest` channel. Its
 prerelease version does not imply mainnet readiness. It is not a drop-in upgrade
@@ -26,13 +26,18 @@ npm install @oxley/sdk
 The `/data` module was introduced in `0.5.0-next.1`; `/auctions` in
 `0.5.0-next.2`. Version `0.5.0-next.4` adds `/launch`: verified auction launch
 preparation, creator-account ABIs, exact launch-fee approvals and resumable stages.
-Existing swap, data and bid/claim/refund APIs remain unchanged.
+Version `0.6.0-next.0` adds opt-in [Gen2 auction support](#gen2-auctions-exact-duration-breadth-rule-trading-gate).
+Version `0.6.0-next.1` reaches [every current market](#current-markets) (flat-fee, Gen3 and Gen8), adds
+[terms acceptance](#terms), [integrator fees](#integrator-fees) and [Gen8 Dynamic Bids](docs/auctions.md#gen8-dynamic-bids).
+Existing swap, data and bid/claim/refund APIs remain unchanged for the deployed flat-fee release.
 Mainnet bindings remain pending; the included manifest and public feeds are testnet only.
 
 ## Start Here
 
 - [Public Builders docs](https://oxley.fun/docs/builders) and [npm package](https://www.npmjs.com/package/@oxley/sdk).
 - Aggregators and exchanges: [provider handoff](docs/provider-handoff.md), [0x source guide](docs/0x.md), [mainnet requirements](docs/mainnet.md).
+- Wallets and apps adding their own fee: [integrator fees](docs/integrator-fees.md) and [example](examples/integrator-fee.ts).
+- Trading every current generation, terms and the opening surcharge: [current markets](docs/markets.md).
 - Frontend builders: [indexed data API](docs/data-api.md) and [polling example](examples/live-data.ts).
 - Auction participation: [bid, claim and refund guide](docs/auctions.md) and [example](examples/auction.ts).
 - Builders and AI agents launching auctions: [launch guide](docs/launch.md) and [example](examples/launch.ts).
@@ -84,6 +89,117 @@ See [auction integration](docs/auctions.md), [example](examples/auction.ts), and
 [auction validation](docs/auction-validation.md). Full compiler ABI JSON exports:
 `@oxley/sdk/abis/auction-controller.json`, `auction-bid-router.json`,
 `auction-adapter.json`, and `cca-auction.json` (all under `@oxley/sdk/abis/`).
+
+## Gen2 Auctions (Exact Duration, Breadth Rule, Trading Gate)
+
+Gen2 is the next auction contract generation. A manifest opts in with
+`"generation": "gen2"`; manifests without the field keep the flat-fee behaviour
+byte-for-byte. The same clients then add:
+
+- **Exact duration.** `prepareLaunch` samples the live block rate (up to 20,000
+  blocks, never before the manifest's `startBlock`), converts the creator's 1-24
+  hours with `auctionDurationBlocks`, checks the controller's `durationBounds(hours)`
+  and encodes `launchAuctionWithCommitmentAndExactDuration`. Supply `secondsPerBlock`
+  or `durationBlocks` to skip sampling. The 0.5 HYPE creator bond is unchanged.
+- **Breadth rule.** Each wallet's committed bid principal is capped at 10% of the
+  auction's minimum gross raise until the capped commitments cover that minimum
+  (at least ten wallets); then there is no per-wallet limit. The 0.1% bid fee is on
+  top of principal. The creator account and its owner cannot bid.
+  `getBidAllowance({ dealId, owner })` reports the hook state; `prepareBid` fails
+  closed with `WALLET_CAP_EXCEEDED` or `CREATOR_BID_NOT_ALLOWED` before simulation.
+- **Trading gate.** After settlement the curve stays closed until every successful
+  bid is delivered, or 10 minutes after activation at the latest.
+  `getTradingStatus(marketId)` returns `{ open, fallbackAt }`; quotes and swaps fail
+  closed with `TRADING_NOT_OPEN` while it is closed.
+
+```ts
+import { createPublicClient, http } from 'viem';
+import { createOxleyAuctionClient, decodeOxleyRevert } from '@oxley/sdk/auctions';
+import deployment from '@oxley/sdk/deployments/elysium-testnet-gen2.json'
+  with { type: 'json' };
+
+const publicClient = createPublicClient({ transport: http('https://testnet-rpc.elysium.kinetiq.xyz') });
+const auctions = createOxleyAuctionClient({ deployment, publicClient });
+const allowance = await auctions.getBidAllowance({ dealId, owner });
+// allowance.unlimited, or allowance.walletAllowance in six-decimal principal units
+try {
+  await auctions.prepareBid({ dealId, caller: owner, entered, maxPriceQ96, previousTick, deadline });
+} catch (error) {
+  // OxleyError codes, or a wallet/RPC revert decoded into a short message:
+  console.log(decodeOxleyRevert(error)?.message ?? error);
+}
+```
+
+**Planned addresses only.** `deployments/elysium-testnet-gen2.json` carries
+`"status": "planned-fork-addresses"`: addresses and runtime hashes from a local
+fork rehearsal, not a live deployment. Runtime-hash verification fails closed
+until those contracts exist on chain; a live Gen2 deploy replaces the file with
+its real addresses and `startBlock`. The flat-fee `elysium-testnet.json` stays the
+default profile. Full Gen2 ABIs are exported under `@oxley/sdk/abis/gen2/`
+(`auction-controller`, `creator-account`, `creator-account-factory`, `bid-router`,
+`bid-hook`, `adapter`, `curve`); source hashes are in [gen2-artifacts.json](docs/gen2-artifacts.json).
+
+## Current Markets
+
+`createOxleyClient` binds one deployment. `createOxleyMarkets` holds one verified client per reviewed
+generation and routes every call to the curve that lists the market, resolved **on chain**:
+
+```ts
+import { createPublicClient, http } from 'viem';
+import { createOxleyMarkets } from '@oxley/sdk';
+
+const markets = createOxleyMarkets({
+  publicClient: createPublicClient({ transport: http('https://testnet-rpc.elysium.kinetiq.xyz') }),
+});
+const { market, entry } = await markets.resolveMarket(dealId); // entry.generation: 'flat-fee' | 'gen3' | 'gen8'
+const swap = await markets.prepareSwap({ marketId: dealId, tokenIn: market.quoteToken, tokenOut: market.coin,
+  amountIn: 10_000_000n, caller: wallet, slippageBps: 50 });
+```
+
+| Generation | Curve | Markets on 2026-10-29 |
+| --- | --- | --- |
+| `flat-fee` | `0x18bf92514c0d749a017aaf69153442703e1a966b` | 8 (`deployments/elysium-testnet.json`) |
+| `gen3` | `0xb7e3e9b2ea74e3051f5c40ce7eb0486b0ab793d3` | 13 (`deployments/elysium-testnet-gen3.json`) |
+| `gen8` | `0x434fd4f556800634399b9f96a4d148de215458e5` | 0 so far; the current launch generation (`deployments/elysium-testnet-gen8.json`) |
+
+Each manifest is verified by runtime code hash and by the curve's own bindings (quote token, terms
+registry). Gen2 is not bundled (every one of its auctions failed, so it holds no market) and the
+older bonded-v2 curves, which hold the original PENELOPE, ODYSSEUS, RODEO and MINI markets, are
+not supported. Quotes come from each curve's own views and include the real fee, including the
+decaying opening surcharge on Gen3 and Gen8 buys (`quote.openingSurchargeWad`). A market is never guessed
+from a symbol or an API row: an optional data-API `deploymentIdentity` only selects the candidate.
+Read [current markets](docs/markets.md) for resolution rules, differences by generation, the trading gate
+and the surcharge. Existing `createOxleyClient`, `buildSwap` and `checkSwap` keep working for the flat-fee manifest.
+
+## Terms
+
+Gen3 and Gen8 curves require the caller to have accepted the Oxley terms once the bound registry
+enforces them (both testnet registries currently do not). `getTermsStatus({ marketId, account })`
+reports `{ enforced, accepted, requiredVersion, termsHash, uri }`, `prepareAcceptTerms` returns an unsigned,
+simulated `acceptTerms(version, termsHash)` (or `null`), `buildAcceptTerms` encodes it offline, and
+`checkSwap` returns `termsAccepted` and refuses to simulate before acceptance. Show the user the text at `uri`
+before they sign; see [terms](docs/markets.md#terms).
+
+## Integrator Fees
+
+`prepareSwapWithFee` adds your own fee, in the quote asset, to a direct trade without touching the
+protocol fees or the user's minimum output. It returns an ordered call batch for EIP-5792
+`wallet_sendCalls` (atomic only on wallets that support batching) and the same calls as a sequential
+fallback with its risk stated:
+
+```ts
+const prepared = await markets.prepareSwapWithFee({ marketId, tokenIn: market.quoteToken, tokenOut: market.coin,
+  amountIn: 10_000_000n, caller: wallet, slippageBps: 100, feeRecipient: treasury, feeBps: 50 });
+// Buy: fee transfer (0.05), exact approval of 9.95, buy with 9.95. prepared.fee.amount === 50_000n
+await markets.checkSwapWithFee(prepared); // re-quotes and re-verifies every call
+await provider.request(prepared.batch);   // wallet_sendCalls, atomicRequired by default
+```
+
+Buys pay the fee from the user's total spend first, approve exactly the net amount and trade it, so the quote and
+minimum are for the net amount. Sells trade first and then transfer a fee computed on the **guaranteed minimum**
+output (never the actual output), so the fee is always covered. `feeBps` is an integer from 1 to
+`MAX_INTEGRATOR_FEE_BPS` (100); the recipient cannot be zero, the curve, a token or an Oxley contract.
+Full semantics, rounding and the atomicity caveat: [integrator fees](docs/integrator-fees.md).
 
 ## Indexed Data
 
@@ -177,6 +293,7 @@ and reconcile it before retrying. A timeout is not proof that nothing was sent.
 | `verifyDeployment()` | Chain, runtime hash, quote binding and decimals checks |
 | `discoverMarkets({cursor?,fromBlock?,toBlock?,pageSize?,coin?})` | Event-based page of active auction markets and canonical cursor |
 | `getMarket(id, blockNumber?)` | Registry/curve-validated market and block identity |
+| `getTradingStatus(id, blockNumber?)` | Gen2 trading gate `{open, fallbackAt}`; flat-fee markets report `open: true` |
 | `quote(request)` | Exact-input quote for one market/pair/caller |
 | `quoteMany(requests, blockNumber?)` | Ordered settled results at the same block |
 | `prepareSwap({...request,slippageBps,ttlSeconds?})` | Fresh quote, transaction, required approval, output/reward receiver |
@@ -184,7 +301,16 @@ and reconcile it before retrying. A timeout is not proof that nothing was sent.
 | `buildSwap(quote,{slippageBps,deadline})` | Offline encoder; does not refresh or authenticate a supplied quote |
 | `buildApprovals(swap,currentAllowance)` | Exact allowance, with zero-first when necessary |
 | `minimumAmountOut(amountOut,slippageBps)` | Integer slippage floor; rejects a zero minimum |
+| `createOxleyMarkets({publicClient,deployments?})` | Routes `resolveMarket`, `quote`, `prepareSwap`, `checkSwap`, fee swaps and terms across the bundled generations |
+| `markets.resolveMarket(dealId,{identity?})` | On-chain generation lookup; `UNSUPPORTED_MARKET`, `AMBIGUOUS_MARKET`, `IDENTITY_MISMATCH` |
+| `getTermsStatus(...)`, `prepareAcceptTerms(...)`, `buildAcceptTerms(...)` | Terms standing, unsigned simulated `acceptTerms`, offline encoder |
+| `prepareSwapWithFee({...request,feeRecipient,feeBps})` | Ordered fee-bearing call batch, EIP-5792 request and sequential fallback |
+| `checkSwapWithFee(prepared,simulate?)` | Re-quote and re-derive every call; funding, terms and optional trade simulation |
+| `buildSwapWithFee(quote,options)`, `integratorFeeAmount(basis,bps)` | Offline builder and fee arithmetic (`MAX_INTEGRATOR_FEE_BPS = 100`) |
+| `openingSurchargeWadAt(seconds)`, `buyFeeBps(rate)` | Mirror of the Gen3/Gen8 decaying surcharge schedule |
+| `getDynamicBidLimits`, `prepareDynamicBid`, `prepareDynamicRebid` from `@oxley/sdk/auctions` | Gen8 wallet limits, bids and rebids with witnesses |
 | `buildZeroExBasic(swap,proportionPpm?)` from `@oxley/sdk/0x` | Optional BASIC source action, not a complete user transaction |
+| `decodeOxleyRevert(errorOrData,{generation?})` | Pure decoder for Oxley rule reverts (Gen2, terms, curve trades, Gen8 bids) into `{name,args,message}`, else `null` |
 
 All amounts use bigint base units, not floating point. Coin precision is 18;
 USDC/Oxy-USDC precision is 6. Use viem `parseUnits`/`formatUnits` at UI boundaries.
@@ -221,7 +347,7 @@ Serialize bigint values as decimal strings at JSON boundaries.
 
 ## Networks And Trust
 
-The bundled testnet manifest identifies the existing auction graph on chain
+The bundled testnet manifests identify the flat-fee, Gen3 and Gen8 auction graphs on chain
 99801. The mainnet template intentionally fails validation until actual mainnet
 values are supplied. Mainnet requires USDC and a fresh contract graph bound to
 that token; changing an SDK address cannot change an immutable deployed binding.
@@ -259,6 +385,9 @@ npm run bundle -- /path/to/oxley-provider-sdk
 ANVIL_BIN=/path/to/anvil npm run test:evm
 # Optional public, read-only verification:
 npm run test:live
+npm run test:live:markets   # every generation, live markets, fee batches, terms, surcharge mirror
+# Regenerate src/testnet-deployments.ts after changing a deployments/*.json manifest:
+npm run embed
 ```
 
 Local EVM tests use retained real Oxley creation bytecode and an unmodified 0x

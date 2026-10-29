@@ -1,16 +1,16 @@
 # Public Indexed Data API
 
-Release: `@oxley/sdk@0.5.0-next.4`, exported from `@oxley/sdk/data` (introduced in `0.5.0-next.1`; data-client runtime unchanged from `0.5.0-next.2`).
+Published baseline: `@oxley/sdk@0.5.0-next.4`, exported from `@oxley/sdk/data` (introduced in `0.5.0-next.1`). The local unreleased candidate adds the corrections documented below; it has not been published or deployed.
 Public API root: `https://app.oxley.fun/api/data/v1`.
 Network: Elysium testnet, chain `99801`, Oxy-USDC. Mainnet is not enabled.
-Version `0.5.0-next.0` does not export `/data`. The current Elysium SDK is the
-default `latest` release; legacy consumers can explicitly pin `0.4.1`.
+Version `0.5.0-next.0` does not export `/data`. The published baseline described here was the default `latest` release at its recorded publication; legacy consumers can explicitly pin `0.4.1`. This local review does not attest the current package-registry tag.
 
 ## Access
 
 Read-only HTTPS JSON, usable from browsers and servers. No API key, wallet,
-signature, or RPC is required from builders. CORS allows all origins without
-credentials. GET and OPTIONS only. The API reuses the approved indexers and their
+signature, or RPC is required from builders. Application responses allow all CORS
+origins without credentials. Upstream platform mitigation can respond before that
+handling, including a 403 challenge without CORS headers. GET and OPTIONS only. The API reuses the approved indexers and their
 release, reorg, freshness and capacity checks; it does not create a new ingestion
 service or perform quote/portfolio RPC enrichment.
 
@@ -105,11 +105,36 @@ The SDK rejects observations older than 180 seconds or over 30 seconds in the
 future. A validated delayed complete prefix can still be displayed, explicitly
 marked `freshness: "stale"`, `readState: "complete-prefix"`, with `lagBlocks`.
 `isCurrentData(response)` is false for it. Recheck freshness while retaining a
-response; a previously fresh result does not stay fresh indefinitely. No preview
+response; a previously fresh result does not stay fresh indefinitely. Both rules below
+also require `checkedAt`, `indexedTimestamp` and `latestTimestamp` to be recent and a
+consistent head (`latestBlock >= indexedBlock`, canonical block hashes). No preview
 fixtures or fabricated fallback history are served. Errors must not be shown as
 zero volume or empty markets.
 
-Paginated endpoints return `hasMore` and opaque `nextCursor`. Pass the cursor
+### Confirmation: finalized prefix or canonical tip
+
+`confirmation` says how the indexed block relates to finality. Absent or `"finalized-prefix"`:
+the index sits exactly on the finalized block, so `isCurrentData` needs `lagBlocks === "0"` and
+`finalizedBlock === indexedBlock`, as before. `"canonical-tip"` (current markets, which follow the
+chain tip): `indexedBlock` normally lies above `finalizedBlock`, `lagBlocks` is deliberately **omitted**
+(it is a finalized-prefix notion, never zero) and `headLagBlocks` / `finalityLagBlocks` keep their meaning.
+A tip response is current when `freshness` is `"fresh"`, `finalizedBlock <= indexedBlock`, `lagBlocks` is
+absent, the timestamps are within the 180 s / +30 s window and the hashes (`indexedBlockHash`,
+`finalizedBlockHash`, `latestBlockHash` when present) are canonical. A tip response is never labelled
+stale: the server refuses it with `503 INDEX_STALE` instead. An unknown `confirmation` is never current.
+Optional `finalizedBlockHash` and `latestBlockHash` accompany it.
+
+Merged responses add `sources: DataSourceObservation[]`, one observation per contributing feed
+(`feed: "current" | "legacy"`, its own `releaseId`, blocks, hashes, times, `freshness`, `confirmation` and
+`delayReason`). `isCurrentData` is true only if the envelope **and every source** is current, each under its
+own rule: a finalized-prefix source by the prefix rule, a canonical-tip source by the tip rule. Catalog
+rows (`Auction`, `IndexedMarket`) then carry `feed` to say which source observed them. Single-market
+resources take their feed from `sources`.
+
+Trades may carry `origin: "user" | "reward"` (a protocol reward purchase is not a user's own trade).
+Bid `status` is text such as `active` or `exited`; treat unknown values as opaque.
+
+Paginated endpoints return `hasMore` and opaque `nextCursor`. Cursors are opaque `ox1.…` strings: pass the cursor
 unchanged with the same filters and fixed `from`/`to`, even after an empty page.
 Continue only while `hasMore` is true. Do not decode cursors, combine different
 generations, or assume separate resources share a snapshot. On `409 CURSOR_STALE`,
@@ -120,13 +145,17 @@ Auction activity is only a latest-50 window, not a complete paginated audit log.
 ## Errors And Polling
 
 `DataApiError` exposes `code`, HTTP `status`, and optional `retryAfterMs`. Typical
-statuses: 400 invalid/bounded range, 404 unknown route/market, 409 stale cursor,
-429 capacity limit, 503 unavailable/stale/unapproved source. The client also
+application statuses: 400 invalid/bounded range, 404 unknown route or `MARKET_NOT_FOUND`,
+409 `CURSOR_STALE` (restart at page one), 429 capacity limit, 503 `INDEX_STALE` (retry after 5 s,
+exposed as `retryAfterMs`), 503 `CAPABILITY_NOT_DEPLOYED` (for example `auction-activity` and
+`auction-prices` on current-feed auctions), other 503 unavailable/unapproved source. The client also
 rejects invalid schemas, chain/asset mismatches and aborted/timed-out requests.
 It sends no cookies or authorization, does not follow redirects, and makes no
 automatic retries. Use the per-call `signal` to cancel on navigation.
 
-Start with one poll every 15 seconds for the visible view, not one per card.
+Start with one poll every 15 seconds for the visible view, not one per card. This
+cadence is guidance, not an exemption from upstream DDoS mitigation. A platform
+403 can return JSON or HTML and may be opaque to a cross-origin browser.
 Never overlap polls. Honor `Retry-After`, add jitter/backoff on errors, pause when
 hidden/offline, and refresh the first page instead of crawling all history on
 every tick. This is polling, **not a WebSocket stream or a latency SLA**. A server
@@ -149,3 +178,63 @@ actions or release authorization. Mainnet needs
 approved indexer/contract/USDC configuration and mainnet-specific release
 validation; changing the SDK chainId alone does not enable it. Trading calldata
 stays in the existing trading client, not in the display-data API.
+
+## Local candidate corrections (25 October 2026; not published or deployed)
+
+The prepared SDK classifies `PLATFORM_CHALLENGE` separately for platform JSON and
+HTML responses, including `x-vercel-mitigated: challenge`. A platform response can
+arrive before application CORS/error handling; a browser can consequently report
+an opaque CORS error. `Retry-After` is a minimum wait, not a promise that mitigation
+ends then. No protection bypass or firewall exemption is included.
+
+Read-only Vercel dashboard inspection on 25 October attributed 33 challenges in
+the displayed past-day window to **DDoS Mitigation**, including 13 requests on
+`/api/data/v1/auctions`. Custom rules were absent, Bot Protection was Off and Attack
+Mode was disabled. This identifies the observed mitigation category; it does not
+correlate each original reported request without its request ID. A custom WAF
+bypass does not override system mitigations. A provider false-positive review,
+or a narrowly approved system bypass for a controlled integration's fixed egress,
+is separate operational work. Public anonymous access must not be promised a
+challenge-free cadence. No platform policy was modified during this inspection.
+
+The standalone SDK's per-read cancellation also works without `AbortSignal.any`
+or `AbortSignal.timeout`. It releases its timer and caller listener on completion
+and fences late results. It does not polyfill globals or change wallet lifetimes.
+
+`isCurrentData()` now requires canonical indexed hash/block evidence, a matching
+finalized block, zero finalized backlog, recent indexed/checked/latest times and
+an available non-regressed latest head. All relevant observations must be no more
+than 180 seconds old (at most 30 seconds in the future). Missing evidence is not
+current. This is display/read freshness, never permission to execute a transaction.
+
+- `lagBlocks` is finalized minus indexed, preserving the existing definition.
+- `headLagBlocks` is latest minus indexed.
+- `finalityLagBlocks` is latest minus finalized.
+- A recently checked, old finalized prefix can have zero `lagBlocks` and still be
+  stale. `checkedAt` does not refresh `indexedTimestamp`.
+
+The envelope's `releaseId` identifies the feed; numeric `generation` is its reorg
+counter. Neither is a market deployment generation. Additive `feedIdentity` keeps
+those facts explicit. `deploymentIdentity` is separate and nullable; canonical
+market rows can carry controller/adapter/curve/quote addresses and runtime hashes,
+plus their observation block/hash. Unknown deployment release names stay null.
+Exact history endpoints may require an exact auction/market lookup to obtain the
+binding. Verify those bindings against a reviewed manifest and fresh chain reads
+before transaction preparation; do not rename the feed release to make a string
+comparison pass. Existing published releases retain their original meaning.
+
+## Resolving An Indexed Market For Trading
+
+Display rows never authorize a transaction. To trade a market from a catalog row, pass its
+`dealId` to `createOxleyMarkets().resolveMarket(dealId, { identity })` from the main package, where
+`identity` is the row's `deploymentIdentity` when it is present (often it is `null`; then omit it).
+A `source: "verified-binding"` identity (with `releaseId` such as `elysium-auctions-gen3-aac49c62c3855f41` or
+`elysium-auctions-gen8-969bd0e317da4145`, plus controller, adapter, curve and quote addresses with runtime
+hashes) must match the reviewed curve, controller and quote token (`releaseId` is informational and is not
+compared), but it is still an HTTP claim: the SDK verifies the runtime hashes through your RPC before preparing
+anything. The identity only selects which reviewed curve to ask; the chain must still list the deal as an
+active, registered market of that generation, otherwise resolution fails (`IDENTITY_MISMATCH`,
+`UNKNOWN_DEPLOYMENT` or `UNSUPPORTED_MARKET`). See [current markets](markets.md). Markets on older,
+unreviewed curves (for example the original bonded-v2 launches) appear in indexed catalogs but are
+not tradable through this SDK.
+
