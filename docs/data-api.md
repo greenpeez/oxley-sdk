@@ -195,3 +195,15 @@ Exact history endpoints may require an exact auction/market lookup to obtain the
 binding. Verify those bindings against a reviewed manifest and fresh chain reads
 before transaction preparation; do not rename the feed release to make a string
 comparison pass. Existing published releases retain their original meaning.
+
+## Resolving An Indexed Market For Trading
+
+Display rows never authorize a transaction. To trade a market from a catalog row, pass its
+`dealId` to `createOxleyMarkets().resolveMarket(dealId, { identity })` from the main package, where
+`identity` is the row's `deploymentIdentity` when it is present (often it is `null`; then omit it).
+The identity only selects which reviewed curve to ask; the chain must still list the deal as an
+active, registered market of that generation, otherwise resolution fails (`IDENTITY_MISMATCH`,
+`UNKNOWN_DEPLOYMENT` or `UNSUPPORTED_MARKET`). See [current markets](markets.md). Markets on older,
+unreviewed curves (for example the original bonded-v2 launches) appear in indexed catalogs but are
+not tradable through this SDK.
+

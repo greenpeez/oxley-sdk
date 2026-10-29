@@ -1,10 +1,11 @@
 import { parseAuctionDeployment } from "./auctions.js";
-import { address, check, hash, uint } from "./validation.js";
+import { address, check, deploymentGeneration, hash, uint } from "./validation.js";
 import type { LaunchDeployment } from "./launch-types.js";
 
 const BOND = 500_000_000_000_000_000n;
 export function parseLaunchDeployment(input: unknown): LaunchDeployment {
   const base = parseAuctionDeployment(input), pins = (input as LaunchDeployment).launchBindings;
+  check(deploymentGeneration(base) !== "gen8", "UNSUPPORTED_GENERATION", "Gen8 launches use their own creator account and are not prepared by this module");
   check(pins && typeof pins === "object", "LAUNCH_BINDINGS_REQUIRED", "Reviewed launch bindings are required");
   for (const p of [pins.creatorAccountFactory, pins.entryController, pins.bondEscrow]) {
     check(p && typeof p === "object", "LAUNCH_BINDINGS_REQUIRED", "Missing launch contract pin");

@@ -1,4 +1,5 @@
-import { curveAbi } from "./abis.js";
+import { openingFeeCurveAbi } from "./gen3-abis.js";
+import { hasOpeningSurcharge, readCurveQuote } from "./curve-profile.js";
 import { address, check, hash, sameAddress, uint } from "./validation.js";
 import type { Anchor, Market, Quote, QuoteRequest } from "./types.js";
 import type { ClientContext } from "./client-context.js";
@@ -7,6 +8,13 @@ import type { MarketReader } from "./client-market.js";
 export function createQuoteReader(context: ClientContext, marketReader: MarketReader) {
   const { rpc, deployment, snapshot, assertCanonical, ensureVerified } = context;
   const { tradableMarketAt } = marketReader;
+  /** The quote view already charges the opening surcharge; the rate is read only so the quote can report it. */
+  async function surchargeAt(market: Market, buy: boolean, anchor: Anchor) {
+    if (!buy || !market.generation || !hasOpeningSurcharge(market.generation)) return {};
+    const openingSurchargeWad = await rpc.readContract({ address: market.curve, abi: openingFeeCurveAbi,
+      functionName: "openingSurchargeWad", args: [market.id], blockNumber: anchor.blockNumber });
+    return { openingSurchargeWad };
+  }
   async function quoteAt(request: QuoteRequest, anchor: Anchor, markets?: Map<string, Promise<Market>>): Promise<Quote> {
     uint(request.amountIn); address(request.caller); address(request.tokenIn); address(request.tokenOut);
     hash(request.marketId);
@@ -17,21 +25,18 @@ export function createQuoteReader(context: ClientContext, marketReader: MarketRe
     const buy = sameAddress(request.tokenIn, market.quoteToken) && sameAddress(request.tokenOut, market.coin);
     const sell = sameAddress(request.tokenIn, market.coin) && sameAddress(request.tokenOut, market.quoteToken);
     check(buy || sell, "UNSUPPORTED_PAIR", "Only the market coin/USDC pair is supported");
-    let amountOut: bigint;
-    let feeAmount: bigint;
-    if (buy) {
-      [amountOut, feeAmount] = await rpc.readContract({ address: market.curve, abi: curveAbi, functionName: "quoteBuy",
-        args: [market.id, request.amountIn, request.caller], blockNumber: anchor.blockNumber });
-    } else {
-      let collateralOut: bigint;
-      [amountOut, collateralOut, feeAmount] = await rpc.readContract({ address: market.curve, abi: curveAbi, functionName: "quoteSell",
-        args: [market.id, request.amountIn, request.caller], blockNumber: anchor.blockNumber });
-      check(collateralOut === 0n, "COLLATERAL_OUTPUT", "This sell includes a non-swap collateral redemption");
-    }
+    const side = buy ? "buy" : "sell";
+    const [read, surcharge] = await Promise.all([
+      readCurveQuote(rpc, deployment, { id: market.id, side, amountIn: request.amountIn, caller: request.caller, blockNumber: anchor.blockNumber }),
+      surchargeAt(market, buy, anchor),
+    ]);
+    const { amountOut, feeAmount } = read;
+    check(read.collateralOut === 0n, "COLLATERAL_OUTPUT", "This sell includes a non-swap collateral redemption");
     check(amountOut > 0n, "ZERO_OUTPUT", "Quote has no executable output");
     return Object.freeze({ ...anchor, chainId: deployment.chainId, releaseId: deployment.releaseId, market,
-      side: buy ? "buy" : "sell", caller: request.caller, tokenIn: request.tokenIn, tokenOut: request.tokenOut,
-      amountIn: request.amountIn, amountOut, feeAmount, feeToken: market.quoteToken });
+      side, caller: request.caller, tokenIn: request.tokenIn, tokenOut: request.tokenOut,
+      amountIn: request.amountIn, amountOut, feeAmount, feeToken: market.quoteToken,
+      ...surcharge });
   }
   async function quote(request: QuoteRequest) {
     const anchor = await snapshot(request.blockNumber);

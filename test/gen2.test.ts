@@ -57,7 +57,8 @@ test("Gen2 ABIs are byte-identical to the evidence and every typed subset matche
     [creatorAccountFactoryAbi, factory!],
   ];
   for (const [subset, abi] of subsets) for (const entry of subset) assert.ok(matches(entry, abi), `${entry.type} ${entry.name}`);
-  const sources = [bidHook!, curve!, controller!, full("ContinuousClearingAuction")];
+  const sources = [bidHook!, curve!, controller!, full("ContinuousClearingAuction"), ...["OxleyTermsRegistry", "ElysiumReserveCurveGen3", "ElysiumCurveGen8",
+    "ElysiumCcaBidRouterGen8", "ElysiumDynamicBidHookGen8"].map(full)];
   for (const entry of oxleyRevertAbi) assert.ok(sources.some(abi => matches(entry, abi)), entry.name);
 });
 test("Gen2 manifest is the fork deployment plus generation/status and parses without changing flat-fee parsing", () => {

@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "elysium-auctions-gen8-969bd0e317da4145",
+  "generation": "gen8",
+  "status": "live",
+  "chainId": 99801,
+  "network": "testnet",
+  "startBlock": "18154191",
+  "curve": {
+    "address": "0x434fd4f556800634399b9f96a4d148de215458e5",
+    "runtimeCodeHash": "0x7386677c87c82fa7ff5707c880b5384661c0704e23ac9ac8a747892577c0ef7f"
+  },
+  "registry": {
+    "address": "0x30995f718f8f1899eafe061c157c5a2f77524ee2",
+    "runtimeCodeHash": "0xe675cf7ee5fd2185cfeb9b1f4ded32e601068e549f5cbc6ecc763dda724bf77a"
+  },
+  "quoteToken": {
+    "address": "0xa4ce6e6c719f7fb524230c367948039b078683e4",
+    "runtimeCodeHash": "0x39aacdb7a8321713594376632f885dac463b2a445d211cf182ea0edc4a3e146f",
+    "symbol": "Oxy-USDC",
+    "decimals": 6
+  },
+  "auctionController": "0xf7ca8d5bf0c9fc3d4e97e43d3fb404a9867fc00e",
+  "termsRegistry": {
+    "address": "0x4e6598e8b9b629b37859a1c12d0d9fe169199976",
+    "runtimeCodeHash": "0xeda875c87a734c44bb43a9b5269ce74f93c62079e8ddaa5531669c545470725c"
+  },
+  "auctionBindings": {
+    "controllerRuntimeCodeHash": "0xf61b6d158d16cd4d1bebd3212c125cdcd58f9e19e11310f3b79e5f604cbc5c62",
+    "bidRouter": {
+      "address": "0x1b055ccdd4cf9b0da44faeae832b44d8706d2e16",
+      "runtimeCodeHash": "0x5e84edf14300956189f062f97301ef55d25b6568308b7642092e3b3789a89680"
+    },
+    "adapter": {
+      "address": "0xd87d369deb69c08d4a1d05da659534097a7a8af6",
+      "runtimeCodeHash": "0x2453218d06d64d7129d9bc3f84106519ba667cee74d33498355c9171d142b8a3"
+    },
+    "bidHook": {
+      "address": "0xda6781540392bcaf4325a66b22800584a1c8a3d1",
+      "runtimeCodeHash": "0xc800a99a5ee7ca486b2e2e49442d4620d1862479fdc981734e27fcf4e8281208"
+    },
+    "exposureHelper": {
+      "address": "0xda735cce92d216a56fefd5596d79dd989c49440e",
+      "runtimeCodeHash": "0x25c44ad1d696a4875c964b2def4ff550bd46936f97eff22d102ca69d9a6db32f"
+    }
+  },
+  "bidRules": {
+    "version": "8",
+    "minBid": "20000000",
+    "tokenCap": "30000000000000000000000000",
+    "liveBids": 3,
+    "walletBids": 12,
+    "hookMaxBids": 0,
+    "capacityMaxBids": 0,
+    "maxPriceLevels": 1000
+  }
+}

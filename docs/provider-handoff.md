@@ -12,13 +12,15 @@ Public links: [GitHub](https://github.com/greenpeez/oxley-sdk),
 
 | Material | Included location |
 | --- | --- |
-| Installable JavaScript and TypeScript types | `@oxley/sdk@0.5.0-next.4`, the default `latest` release |
+| Installable JavaScript and TypeScript types | `@oxley/sdk@0.5.0-next.4` is the published `latest` release; `0.6.0-next.1` adds the items marked below and is not yet published |
 | Full curve and registry ABI JSON | `abis/` |
 | Auction controller, bid router, adapter and CCA ABI JSON | `abis/`, see [auction guide](auctions.md) |
 | Unsigned bid, claim and full/partial refund helpers | `@oxley/sdk/auctions`, `examples/auction.ts` |
 | Verified auction launch steps and creator-account ABIs | `@oxley/sdk/launch`, `docs/launch.md`, `examples/launch.ts` |
 | Minimal Solidity integration interface | `docs/IOxleyCurve.sol` |
-| Network, token, addresses and runtime pins | `deployments/elysium-testnet.json` |
+| Network, token, addresses and runtime pins | `deployments/elysium-testnet.json` (flat-fee), `elysium-testnet-gen3.json`, `elysium-testnet-gen8.json` (`0.6.0-next.1`) |
+| Trading every current generation, terms, opening surcharge | `docs/markets.md`, `createOxleyMarkets` (`0.6.0-next.1`) |
+| Fee-bearing swaps for wallets and apps (EIP-5792 batch) | `docs/integrator-fees.md`, `examples/integrator-fee.ts` (`0.6.0-next.1`) |
 | Quote, approvals and calldata usage | `README.md`, `examples/` |
 | 0x optional source action and exact offsets | `docs/0x.md`, `@oxley/sdk/0x` |
 | Runtime and settlement test evidence | `docs/validation.md` |
@@ -44,6 +46,18 @@ Public links: [GitHub](https://github.com/greenpeez/oxley-sdk),
 These are **testnet** addresses. Do not ship them as mainnet bindings. The runtime
 pins match the retained release evidence and recorded public RPC checks. Explorer
 source verification is not an independent security audit or proof of mainnet readiness.
+
+## Other Generations
+
+The table above is the flat-fee release. Newer curves hold more markets: Gen3
+(`0xb7e3e9b2ea74e3051f5c40ce7eb0486b0ab793d3`) and the quote-only Gen8
+(`0x434fd4f556800634399b9f96a4d148de215458e5`, no active market yet). Their pins live in
+`deployments/elysium-testnet-gen3.json` and `-gen8.json`. A provider integrating the SDK uses
+`createOxleyMarkets`, which resolves any deal ID to its curve on chain; one that integrates
+the contracts directly must use each curve's own view and call signatures, which
+[current markets](markets.md#what-differs-by-generation) lists. Gen3 and Gen8 buys and sells also require the
+caller (the executor, for a routed trade) to have accepted the terms once the registry
+enforces them, and pay a decaying opening surcharge on buys.
 
 ## Discovery And Execution
 

@@ -2,7 +2,9 @@ import { decodeErrorResult, formatUnits, type Hex } from "viem";
 import { oxleyRevertAbi } from "./gen2-abis.js";
 
 export type OxleyRevertName = "WalletCapExceeded" | "CreatorBidNotAllowed" | "AuctionNotRegistered" | "TradingNotOpen"
-  | "ExactDurationRequired" | "InvalidDurationBlocks" | "InvalidRequestedHours";
+  | "ExactDurationRequired" | "InvalidDurationBlocks" | "InvalidRequestedHours" | "TermsNotAccepted" | "BuysPaused" | "MinimumNotMet"
+  | "DeadlineExpired" | "QuoteDust" | "CapitalShortfall" | "WalletBidLimitReached" | "BidAmountTooLow" | "PriceLevelLimit"
+  | "BidPriceTooHigh" | "InvalidWitness" | "BidExpired" | "NotBidOwner" | "BidNotOutbid" | "RebidPriceTooLow";
 export interface OxleyRevert {
   readonly name: OxleyRevertName;
   readonly args: readonly unknown[];
@@ -31,37 +33,58 @@ function candidates(value: unknown, out: Hex[], depth = 0): Hex[] {
 function decodeResult(data: Hex) {
   try { return decodeErrorResult({ abi: oxleyRevertAbi, data }); } catch { return null; }
 }
-function explainRevert(result: NonNullable<ReturnType<typeof decodeResult>>, symbol: string): OxleyRevert | null {
+type Args = readonly unknown[];
+interface RevertContext { symbol: string; generation?: string }
+/** Dynamic Bids (Gen8) have no breadth rule: the same error means the wallet's own ceiling or token cap. */
+const dynamicCapMessage = (remaining: bigint, symbol: string) => remaining > 0n
+  ? `You can bid up to ${formatUnits(remaining, 6)} ${symbol} more on this auction` : "This wallet has reached its limit on this auction";
+const MESSAGES: Partial<Record<OxleyRevertName, (args: Args, context: RevertContext) => string>> = {
+  WalletCapExceeded: (args, { symbol, generation }) => generation === "gen8" ? dynamicCapMessage(args[2] as bigint, symbol) : walletCapMessage(args[2] as bigint, symbol),
+  CreatorBidNotAllowed: () => "Creators can't bid on their own auction",
+  AuctionNotRegistered: () => "This auction is not registered with the bid rules and cannot accept bids",
+  TradingNotOpen: args => tradingNotOpenMessage(args[1] as bigint),
+  ExactDurationRequired: () => "This release needs an exact auction length in blocks; use the exact-duration launch",
+  InvalidDurationBlocks: args => `Auction length of ${args[0]} blocks is outside the accepted ${args[1]}-${args[2]} blocks for the requested hours (block rate outside 0.10-0.25 s)`,
+  InvalidRequestedHours: () => "Auction duration must be 1-24 whole hours",
+  TermsNotAccepted: () => "The wallet must accept the current Oxley terms before trading or bidding",
+  BuysPaused: () => "Buying is paused on this curve; selling stays available",
+  MinimumNotMet: () => "The trade would pay less than your minimum; requote or raise your slippage tolerance",
+  DeadlineExpired: () => "The trade deadline has passed; prepare it again",
+  QuoteDust: () => "This amount cannot be filled exactly on the curve; try a different amount",
+  CapitalShortfall: () => "The curve cannot fill this amount right now",
+  WalletBidLimitReached: args => `This wallet has reached the limit of ${args[1]} ${args[1] === 3n ? "live" : "total"} bids on this auction`,
+  BidAmountTooLow: () => "Minimum bid is 20 Oxy-USDC",
+  PriceLevelLimit: () => "Too many price levels are open; bid at a price that already has bids, or try again shortly",
+  BidPriceTooHigh: () => "The bid price is above the auction's maximum",
+  InvalidWitness: () => "The checkpoint hints for this wallet's bids are stale; prepare the bid again",
+  BidExpired: () => "The bid deadline has passed; prepare it again",
+  NotBidOwner: () => "Only the bid's owner can rebid it",
+  BidNotOutbid: () => "Only an outbid bid can be rebid",
+  RebidPriceTooLow: () => "A rebid must be priced above the current clearing price",
+};
+function explainRevert(result: NonNullable<ReturnType<typeof decodeResult>>, context: RevertContext): OxleyRevert | null {
+  const name = result.errorName as OxleyRevertName, explain = MESSAGES[name];
+  // Solidity Error(string)/Panic(uint256) and the wrapper itself are not Oxley rule errors.
+  if (!explain) return null;
   const args = Object.freeze([...result.args ?? []]);
-  let message: string;
-  switch (result.errorName) {
-    case "WalletCapExceeded": message = walletCapMessage(result.args[2], symbol); break;
-    case "CreatorBidNotAllowed": message = "Creators can't bid on their own auction"; break;
-    case "AuctionNotRegistered": message = "This auction is not registered with the bid rules and cannot accept bids"; break;
-    case "TradingNotOpen": message = tradingNotOpenMessage(result.args[1]); break;
-    case "ExactDurationRequired": message = "This release needs an exact auction length in blocks; use the exact-duration launch"; break;
-    case "InvalidDurationBlocks": message = `Auction length of ${result.args[0]} blocks is outside the accepted `
-      + `${result.args[1]}-${result.args[2]} blocks for the requested hours (block rate outside 0.10-0.25 s)`; break;
-    case "InvalidRequestedHours": message = "Auction duration must be 1-24 whole hours"; break;
-    default: return null; // Solidity Error(string)/Panic(uint256) are not Oxley rule errors.
-  }
-  return Object.freeze({ name: result.errorName, args, message });
+  return Object.freeze({ name, args, message: explain(args, context) });
 }
-function decode(data: Hex, symbol: string, depth: number): OxleyRevert | null {
+function decode(data: Hex, context: RevertContext, depth: number): OxleyRevert | null {
   const result = decodeResult(data);
   if (!result) return null;
   if (result.errorName === "ValidationHookCallFailed") {
-    return depth < 2 ? decode(result.args[0], symbol, depth + 1) : null;
+    return depth < 2 ? decode(result.args[0], context, depth + 1) : null;
   }
-  return explainRevert(result, symbol);
+  return explainRevert(result, context);
 }
 /**
- * Pure decoder for Gen2 auction/curve reverts. Accepts raw revert data or a viem/EIP-1193 error object
- * and returns null for anything else (including unrelated custom errors). Never performs RPC calls.
+ * Pure decoder for Oxley rule reverts (Gen2 auctions and gate, Gen3/Gen8 terms and curve trades, Gen8 Dynamic Bids). Accepts raw
+ * revert data or a viem/EIP-1193 error object and returns null for anything else (including unrelated custom errors). Never
+ * performs RPC calls. Pass `generation: "gen8"` so a shared error such as `WalletCapExceeded` is worded for that generation.
  */
-export function decodeOxleyRevert(errorOrData: unknown, options: { quoteSymbol?: string } = {}): OxleyRevert | null {
+export function decodeOxleyRevert(errorOrData: unknown, options: { quoteSymbol?: string; generation?: "gen2" | "gen3" | "gen8" } = {}): OxleyRevert | null {
   for (const data of candidates(errorOrData, [])) {
-    const decoded = decode(data, options.quoteSymbol ?? "USDC", 0);
+    const decoded = decode(data, { symbol: options.quoteSymbol ?? "USDC", generation: options.generation }, 0);
     if (decoded) return decoded;
   }
   return null;

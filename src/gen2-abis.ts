@@ -43,7 +43,10 @@ export const gen2CurveAbi = parseAbi([
   "function settlementEscrow() view returns (address)",
   "error TradingNotOpen(bytes32 dealId,uint256 fallbackOpensAt)",
 ]);
-/** Gen2 errors decoded by `decodeOxleyRevert`, plus the CCA's wrapper around validation-hook reverts. */
+/**
+ * Rule errors decoded by `decodeOxleyRevert`: Gen2 launch/bid/gate rules, the Gen3/Gen8 terms and curve trade errors, the Gen8
+ * Dynamic Bids hook and router, plus the CCA's wrapper around validation-hook reverts.
+ */
 export const oxleyRevertAbi = parseAbi([
   "error WalletCapExceeded(address owner,uint256 requested,uint256 remainingAllowance)",
   "error CreatorBidNotAllowed(address owner)",
@@ -53,4 +56,9 @@ export const oxleyRevertAbi = parseAbi([
   "error InvalidDurationBlocks(uint32 durationBlocks,uint32 minimumBlocks,uint32 maximumBlocks)",
   "error InvalidRequestedHours(uint8 requestedHours)",
   "error ValidationHookCallFailed(bytes reason)",
+  "error TermsNotAccepted(address user,uint64 requiredVersion,uint64 acceptedVersion)",
+  "error BuysPaused()", "error MinimumNotMet()", "error DeadlineExpired()", "error QuoteDust()", "error CapitalShortfall()",
+  "error WalletBidLimitReached(address owner,uint256 limit)", "error BidAmountTooLow()", "error PriceLevelLimit(uint256 maxPrice)",
+  "error BidPriceTooHigh(uint256 submitted,uint256 maximum)", "error InvalidWitness()",
+  "error BidExpired()", "error NotBidOwner()", "error BidNotOutbid()", "error RebidPriceTooLow(uint256 maxPrice,uint256 clearing)",
 ]);

@@ -16,6 +16,7 @@ export function createBidPreparer(context: AuctionContext, auctions: AuctionRead
   const { resolveAt } = auctions;
   const { breadthAt, requireBidAllowed } = allowances;
   async function prepareBid(input: AuctionBidInput & { caller: Address; simulate?: boolean }) {
+    check(!context.gen8, "DYNAMIC_BID_REQUIRED", "Gen8 bids carry per-wallet witnesses: use prepareDynamicBid");
     bidInputs(input); address(input.caller);
     const at = await anchor(), { hook, auction } = await resolveAt(input.dealId, at), blockNumber = at.blockNumber;
     check(input.deadline > at.timestamp, "EXPIRED_DEADLINE", "Supply a future Unix deadline");

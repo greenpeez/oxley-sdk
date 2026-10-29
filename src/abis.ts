@@ -2,6 +2,8 @@ import { parseAbi } from "viem";
 export * from "./auction-abis.js";
 export * from "./launch-abis.js";
 export * from "./gen2-abis.js";
+export * from "./gen3-abis.js";
+export * from "./gen8-abis.js";
 
 // The deployed VNext curve uses deal IDs, not token-pair selectors.
 export const curveAbi = parseAbi([
@@ -29,4 +31,5 @@ export const tokenAbi = parseAbi([
   "function balanceOf(address) view returns (uint256)",
   "function allowance(address,address) view returns (uint256)",
   "function approve(address,uint256) returns (bool)",
+  "function transfer(address,uint256) returns (bool)",
 ]);

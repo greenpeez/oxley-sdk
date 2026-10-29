@@ -2,13 +2,14 @@ import { keccak256 } from "viem";
 import { auctionControllerAbi, auctionBidRouterAbi, auctionAdapterAbi } from "./auction-abis.js";
 import { tokenAbi } from "./abis.js";
 import { check, deploymentGeneration, sameAddress, address } from "./validation.js";
+import { verifyGen8Graph } from "./auction-gen8-context.js";
 import type { Anchor, RpcClient } from "./types.js";
 import type { AuctionDeployment } from "./auctions.js";
 
 export function createAuctionContext(rpc: RpcClient, deployment: AuctionDeployment) {
   const { bidRouter, adapter } = deployment.auctionBindings;
   const controller = deployment.auctionController;
-  const gen2 = deploymentGeneration(deployment) === "gen2";
+  const generation = deploymentGeneration(deployment), gen2 = generation === "gen2", gen8 = generation === "gen8";
   async function anchor(): Promise<Anchor> {
     const [chain, block] = await Promise.all([rpc.getChainId(), rpc.getBlock({ blockTag: "latest" })]);
     check(chain === deployment.chainId, "CHAIN_MISMATCH", "RPC chain does not match deployment");
@@ -48,8 +49,9 @@ export function createAuctionContext(rpc: RpcClient, deployment: AuctionDeployme
       && sameAddress(hook, adapterHook) && decimals === 6,
     "AUCTION_BINDING_MISMATCH", "Controller, router, adapter or quote binding mismatch");
     address(hook);
+    await verifyGen8Graph(rpc, deployment, at, hook);
     return hook;
   }
-  return { rpc, deployment, bidRouter, adapter, controller, gen2, anchor, canonical, verifyAt };
+  return { rpc, deployment, bidRouter, adapter, controller, gen2, gen8, anchor, canonical, verifyAt };
 }
 export type AuctionContext = ReturnType<typeof createAuctionContext>;

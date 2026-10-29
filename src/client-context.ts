@@ -1,5 +1,6 @@
 import { keccak256 } from "viem";
 import { curveAbi, tokenAbi } from "./abis.js";
+import { openingFeeCurveAbi } from "./gen3-abis.js";
 import { check, sameAddress, uint } from "./validation.js";
 import type { Anchor, Deployment, RpcClient } from "./types.js";
 
@@ -21,10 +22,19 @@ export function createClientContext(rpc: RpcClient, deployment: Deployment) {
     check(block.hash === anchor.blockHash, "REORG", "Quote/discovery block changed; discard results and retry");
   }
 
+  // Gen3/Gen8 curves enforce one immutable terms registry; the manifest pin must be that exact contract.
+  async function verifyTermsBinding(anchor: Anchor): Promise<void> {
+    if (!deployment.termsRegistry) return;
+    const bound = await rpc.readContract({ address: deployment.curve.address, abi: openingFeeCurveAbi,
+      functionName: "termsRegistry", blockNumber: anchor.blockNumber });
+    check(sameAddress(bound, deployment.termsRegistry.address), "TERMS_BINDING_MISMATCH", "Curve terms registry does not match the manifest");
+  }
+
   // Immutable deployments are checked at connection; callers can explicitly recheck at any time.
   let verified: Promise<void> | undefined;
   async function verifyAt(anchor: Anchor): Promise<void> {
-    await Promise.all([deployment.curve, deployment.registry, deployment.quoteToken].map(async pin => {
+    const pins = [deployment.curve, deployment.registry, deployment.quoteToken, ...deployment.termsRegistry ? [deployment.termsRegistry] : []];
+    await Promise.all(pins.map(async pin => {
       const code = await rpc.getCode({ address: pin.address, blockNumber: anchor.blockNumber });
       check(code && code !== "0x" && keccak256(code).toLowerCase() === pin.runtimeCodeHash.toLowerCase(),
         "CODE_MISMATCH", `Runtime code differs at ${pin.address}`);
@@ -35,6 +45,7 @@ export function createClientContext(rpc: RpcClient, deployment: Deployment) {
     ]);
     check(sameAddress(quoteToken, deployment.quoteToken.address) && decimals === 6,
       "QUOTE_BINDING_MISMATCH", "Curve quote token or decimals do not match the manifest");
+    await verifyTermsBinding(anchor);
     await assertCanonical(anchor);
   }
   async function ensureVerified(anchor: Anchor): Promise<void> {

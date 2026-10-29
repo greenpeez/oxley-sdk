@@ -1,6 +1,7 @@
 import type { Hex } from "viem";
-import { curveAbi, registryAbi, tokenAbi } from "./abis.js";
+import { registryAbi, tokenAbi } from "./abis.js";
 import { gen2CurveAbi } from "./gen2-abis.js";
+import { hasTradingGate, readCurveMarket } from "./curve-profile.js";
 import { tradingNotOpenMessage } from "./revert.js";
 import { address, check, deploymentGeneration, hash, OxleyError, sameAddress } from "./validation.js";
 import type { Anchor, Market } from "./types.js";
@@ -8,27 +9,28 @@ import type { ClientContext } from "./client-context.js";
 
 export function createMarketReader(context: ClientContext) {
   const { rpc, deployment, snapshot, assertCanonical, ensureVerified } = context;
-  const gated = deploymentGeneration(deployment) === "gen2";
+  const generation = deploymentGeneration(deployment), gated = hasTradingGate(generation);
   async function marketAt(id: Hex, anchor: Anchor): Promise<Market> {
     hash(id);
     const [deal, market] = await Promise.all([
       rpc.readContract({ address: deployment.registry.address, abi: registryAbi, functionName: "deal", args: [id], blockNumber: anchor.blockNumber }),
-      rpc.readContract({ address: deployment.curve.address, abi: curveAbi, functionName: "market", args: [id], blockNumber: anchor.blockNumber }),
+      readCurveMarket(rpc, deployment, id, anchor.blockNumber),
     ]);
+    // Gen8 curves hold no reserve asset of their own: the registry's reserve is the quote token.
     check(deal.profile === 1 && deal.status === 3 && market.active
       && sameAddress(deal.controller, deployment.auctionController)
       && sameAddress(deal.coin, market.coin) && sameAddress(deal.creator, market.creator)
       && sameAddress(deal.reserveAsset, deployment.quoteToken.address)
-      && sameAddress(market.reserveAsset, deployment.quoteToken.address),
+      && (market.reserveAsset === undefined || sameAddress(market.reserveAsset, deployment.quoteToken.address)),
     "UNSUPPORTED_MARKET", "Only active, registered USDC auction markets are supported");
     address(market.coin);
     check(!sameAddress(market.coin, deployment.quoteToken.address), "UNSUPPORTED_MARKET", "Invalid market pair");
     const coinDecimals = await rpc.readContract({ address: market.coin, abi: tokenAbi, functionName: "decimals", blockNumber: anchor.blockNumber });
     check(coinDecimals === 18, "UNSUPPORTED_MARKET", "Unexpected auction coin precision");
     return Object.freeze({ id, coin: market.coin, coinDecimals, creator: market.creator,
-      activatedAt: market.activatedAt, quoteToken: deployment.quoteToken.address, curve: deployment.curve.address });
+      activatedAt: market.activatedAt, quoteToken: deployment.quoteToken.address, curve: deployment.curve.address, generation });
   }
-  /** Gen2 curve gate: closed until settlement delivery completes or its timed fallback passes. */
+  /** Gen2+ curve gate: closed until settlement delivery completes or its timed fallback passes. */
   async function gateAt(market: Market, anchor: Anchor) {
     const at = { address: deployment.curve.address, abi: gen2CurveAbi, args: [market.id], blockNumber: anchor.blockNumber } as const;
     const [open, fallbackAt] = await Promise.all([
