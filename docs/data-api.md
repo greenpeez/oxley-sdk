@@ -105,11 +105,36 @@ The SDK rejects observations older than 180 seconds or over 30 seconds in the
 future. A validated delayed complete prefix can still be displayed, explicitly
 marked `freshness: "stale"`, `readState: "complete-prefix"`, with `lagBlocks`.
 `isCurrentData(response)` is false for it. Recheck freshness while retaining a
-response; a previously fresh result does not stay fresh indefinitely. No preview
+response; a previously fresh result does not stay fresh indefinitely. Both rules below
+also require `checkedAt`, `indexedTimestamp` and `latestTimestamp` to be recent and a
+consistent head (`latestBlock >= indexedBlock`, canonical block hashes). No preview
 fixtures or fabricated fallback history are served. Errors must not be shown as
 zero volume or empty markets.
 
-Paginated endpoints return `hasMore` and opaque `nextCursor`. Pass the cursor
+### Confirmation: finalized prefix or canonical tip
+
+`confirmation` says how the indexed block relates to finality. Absent or `"finalized-prefix"`:
+the index sits exactly on the finalized block, so `isCurrentData` needs `lagBlocks === "0"` and
+`finalizedBlock === indexedBlock`, as before. `"canonical-tip"` (current markets, which follow the
+chain tip): `indexedBlock` normally lies above `finalizedBlock`, `lagBlocks` is deliberately **omitted**
+(it is a finalized-prefix notion, never zero) and `headLagBlocks` / `finalityLagBlocks` keep their meaning.
+A tip response is current when `freshness` is `"fresh"`, `finalizedBlock <= indexedBlock`, `lagBlocks` is
+absent, the timestamps are within the 180 s / +30 s window and the hashes (`indexedBlockHash`,
+`finalizedBlockHash`, `latestBlockHash` when present) are canonical. A tip response is never labelled
+stale: the server refuses it with `503 INDEX_STALE` instead. An unknown `confirmation` is never current.
+Optional `finalizedBlockHash` and `latestBlockHash` accompany it.
+
+Merged responses add `sources: DataSourceObservation[]`, one observation per contributing feed
+(`feed: "current" | "legacy"`, its own `releaseId`, blocks, hashes, times, `freshness`, `confirmation` and
+`delayReason`). `isCurrentData` is true only if the envelope **and every source** is current, each under its
+own rule: a finalized-prefix source by the prefix rule, a canonical-tip source by the tip rule. Catalog
+rows (`Auction`, `IndexedMarket`) then carry `feed` to say which source observed them. Single-market
+resources take their feed from `sources`.
+
+Trades may carry `origin: "user" | "reward"` (a protocol reward purchase is not a user's own trade).
+Bid `status` is text such as `active` or `exited`; treat unknown values as opaque.
+
+Paginated endpoints return `hasMore` and opaque `nextCursor`. Cursors are opaque `ox1.…` strings: pass the cursor
 unchanged with the same filters and fixed `from`/`to`, even after an empty page.
 Continue only while `hasMore` is true. Do not decode cursors, combine different
 generations, or assume separate resources share a snapshot. On `409 CURSOR_STALE`,
@@ -120,8 +145,10 @@ Auction activity is only a latest-50 window, not a complete paginated audit log.
 ## Errors And Polling
 
 `DataApiError` exposes `code`, HTTP `status`, and optional `retryAfterMs`. Typical
-application statuses: 400 invalid/bounded range, 404 unknown route/market, 409 stale cursor,
-429 capacity limit, 503 unavailable/stale/unapproved source. The client also
+application statuses: 400 invalid/bounded range, 404 unknown route or `MARKET_NOT_FOUND`,
+409 `CURSOR_STALE` (restart at page one), 429 capacity limit, 503 `INDEX_STALE` (retry after 5 s,
+exposed as `retryAfterMs`), 503 `CAPABILITY_NOT_DEPLOYED` (for example `auction-activity` and
+`auction-prices` on current-feed auctions), other 503 unavailable/unapproved source. The client also
 rejects invalid schemas, chain/asset mismatches and aborted/timed-out requests.
 It sends no cookies or authorization, does not follow redirects, and makes no
 automatic retries. Use the per-call `signal` to cancel on navigation.
@@ -201,7 +228,11 @@ comparison pass. Existing published releases retain their original meaning.
 Display rows never authorize a transaction. To trade a market from a catalog row, pass its
 `dealId` to `createOxleyMarkets().resolveMarket(dealId, { identity })` from the main package, where
 `identity` is the row's `deploymentIdentity` when it is present (often it is `null`; then omit it).
-The identity only selects which reviewed curve to ask; the chain must still list the deal as an
+A `source: "verified-binding"` identity (with `releaseId` such as `elysium-auctions-gen3-aac49c62c3855f41` or
+`elysium-auctions-gen8-969bd0e317da4145`, plus controller, adapter, curve and quote addresses with runtime
+hashes) must match the reviewed curve, controller and quote token (`releaseId` is informational and is not
+compared), but it is still an HTTP claim: the SDK verifies the runtime hashes through your RPC before preparing
+anything. The identity only selects which reviewed curve to ask; the chain must still list the deal as an
 active, registered market of that generation, otherwise resolution fails (`IDENTITY_MISMATCH`,
 `UNKNOWN_DEPLOYMENT` or `UNSUPPORTED_MARKET`). See [current markets](markets.md). Markets on older,
 unreviewed curves (for example the original bonded-v2 launches) appear in indexed catalogs but are

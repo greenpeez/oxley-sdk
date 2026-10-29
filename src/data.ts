@@ -16,13 +16,30 @@ export interface DataClientOptions {
   fetch?: typeof globalThis.fetch;
   timeoutMs?: number;
 }
-/** Recheck this when rendering retained data; fetching once does not keep it fresh. */
-export function isCurrentData(value: Pick<IndexedData<unknown>, "checkedAt" | "freshness"> &
-  Partial<Pick<IndexedData<unknown>, "indexedTimestamp" | "indexedBlock" | "finalizedBlock" | "lagBlocks" | "latestBlock" | "latestTimestamp" | "indexedBlockHash">>, now = Date.now()): boolean {
-  return value.freshness === "fresh" && currentTime(value.checkedAt,now) && currentTime(value.indexedTimestamp,now)
-    && value.lagBlocks === "0" && typeof value.indexedBlock === "string" && /^\d+$/.test(value.indexedBlock)
-    && value.finalizedBlock === value.indexedBlock && currentHead(value,now) && canonicalHash(value.indexedBlockHash);
+type Observation = Pick<IndexedData<unknown>, "checkedAt" | "freshness"> & Partial<Pick<IndexedData<unknown>, "indexedTimestamp" | "indexedBlock"
+  | "finalizedBlock" | "lagBlocks" | "latestBlock" | "latestTimestamp" | "indexedBlockHash" | "confirmation" | "finalizedBlockHash" | "latestBlockHash">>;
+/**
+ * Recheck this when rendering retained data; fetching once does not keep it fresh. A finalized-prefix response (no `confirmation`)
+ * is current only when the index sits exactly on the finalized block (`lagBlocks` "0"). A `canonical-tip` response is current when
+ * it is `fresh`, `finalizedBlock <= indexedBlock` and `lagBlocks` is absent. Either way every timestamp must be within 180 seconds
+ * (30 in the future), the head evidence must be consistent, and every `sources[]` entry must be current under its own rule.
+ */
+export function isCurrentData(value: Observation & { sources?: readonly Observation[] }, now = Date.now()): boolean {
+  return currentObservation(value, now) && (value.sources === undefined
+    || Array.isArray(value.sources) && value.sources.every(source => source !== null && typeof source === "object" && currentObservation(source, now)));
 }
+const decimal = (value: unknown): value is string => typeof value === "string" && /^\d+$/.test(value);
+function currentObservation(value: Observation, now: number): boolean {
+  const mode = value.confirmation;
+  return value.freshness === "fresh" && (mode === undefined || mode === "finalized-prefix" || mode === "canonical-tip")
+    && recentObservation(value, now) && currentHead(value, now) && hashesValid(value)
+    && (mode === "canonical-tip" ? tipFinality(value) : prefixFinality(value));
+}
+const recentObservation = (value: Observation, now: number) => currentTime(value.checkedAt, now) && currentTime(value.indexedTimestamp, now) && decimal(value.indexedBlock);
+const hashesValid = (value: Observation) => canonicalHash(value.indexedBlockHash)
+  && [value.finalizedBlockHash, value.latestBlockHash].every(hash => hash === undefined || canonicalHash(hash));
+const prefixFinality = (value: Observation) => value.lagBlocks === "0" && value.finalizedBlock === value.indexedBlock;
+const tipFinality = (value: Observation) => value.lagBlocks === undefined && decimal(value.finalizedBlock) && BigInt(value.finalizedBlock) <= BigInt(value.indexedBlock!);
 function canonicalHash(value:unknown) {return typeof value==="string"&&/^0x[0-9a-f]{64}$/iu.test(value);}
 function currentHead(value:{latestBlock?:string|null;latestTimestamp?:number|null;indexedBlock?:string},now:number) {
   return typeof value.latestBlock==="string"&&/^\d+$/.test(value.latestBlock)

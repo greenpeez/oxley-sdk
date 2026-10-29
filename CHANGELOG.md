@@ -35,6 +35,12 @@ This change deploys no contracts and broadcasts no transactions.
   `@oxley/sdk/abis/*`, source and sha256 evidence in `docs/live-artifacts.json`, typed subsets
   (`termsRegistryAbi`, `openingFeeCurveAbi`, `gen8CurveAbi`, `gen8BidRouterAbi`, `gen8BidHookAbi`, `ccaCheckpointAbi`)
   tested against them. `decodeOxleyRevert` also decodes terms, curve-trade and Gen8 bid errors.
+- Data API: `isCurrentData` understands `confirmation: "canonical-tip"` responses (fresh, `finalizedBlock <= indexedBlock`, no
+  `lagBlocks`, recent timestamps) and judges every `sources[]` entry under its own rule; finalized-prefix rules are unchanged.
+  New optional types: `confirmation`, `finalizedBlockHash`, `latestBlockHash`, `DataSourceObservation`/`sources`, `feed` on auctions and
+  markets, `origin` on trades. Opaque `ox1.` cursors and the `CURSOR_STALE`, `INDEX_STALE`, `MARKET_NOT_FOUND` and
+  `CAPABILITY_NOT_DEPLOYED` errors already pass through unchanged. `resolveMarket({ identity })` also binds a verified-binding
+  identity's controller and quote to the reviewed pins.
 - Tooling: `npm run test:live:markets` (read-only testnet check), `npm run embed`, `scripts/import-live-manifests.mjs`.
 
 ## 0.6.0-next.0 - 2026-10-20

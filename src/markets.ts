@@ -8,11 +8,19 @@ import type { SwapFeeRequest } from "./client-fee-swaps.js";
 import type { SwapWithFee } from "./swap-fee.js";
 
 /** The data API's `deploymentIdentity` (or any equivalent). It only selects a candidate; the chain still has to confirm the market. */
-export interface DeploymentIdentityHint { chainId?: number; curve: { address: string; runtimeCodeHash?: string } }
+export interface DeploymentIdentityHint {
+  chainId?: number; curve: { address: string; runtimeCodeHash?: string };
+  /** When present they must match the reviewed controller and quote token. `releaseId` and `source` are informational and not compared. */
+  controller?: { address: string; runtimeCodeHash?: string }; quote?: { address: string; runtimeCodeHash?: string };
+}
 export interface MarketGeneration {
   readonly generation: DeploymentGeneration; readonly releaseId: string; readonly status: string | null;
   readonly curve: Address; readonly startBlock: string;
 }
+/** A reported contract binds to a reviewed pin when its address (and runtime hash, if reported) are the pin's. */
+const boundTo = (reported: { address: string; runtimeCodeHash?: string } | undefined, address: string, runtimeCodeHash?: string) =>
+  reported === undefined || sameAddress(reported.address, address) && (reported.runtimeCodeHash === undefined || runtimeCodeHash === undefined
+    || sameAddress(reported.runtimeCodeHash, runtimeCodeHash));
 interface Entry extends MarketGeneration { readonly deployment: Deployment; readonly client: OxleyClient }
 
 /**
@@ -37,9 +45,11 @@ export function createOxleyMarkets(options: { publicClient: RpcClient; deploymen
   }
   function entryForIdentity(identity: DeploymentIdentityHint): Entry {
     address(identity.curve?.address);
-    const found = entries.find(entry => sameAddress(entry.curve, identity.curve.address)
-      && (identity.chainId === undefined || identity.chainId === entry.deployment.chainId)
-      && (identity.curve.runtimeCodeHash === undefined || sameAddress(identity.curve.runtimeCodeHash, entry.deployment.curve.runtimeCodeHash)));
+    const found = entries.find(({ deployment }) => sameAddress(deployment.curve.address, identity.curve.address)
+      && (identity.chainId === undefined || identity.chainId === deployment.chainId)
+      && boundTo(identity.curve, deployment.curve.address, deployment.curve.runtimeCodeHash)
+      && boundTo(identity.controller, deployment.auctionController, (deployment as { auctionBindings?: { controllerRuntimeCodeHash?: string } }).auctionBindings?.controllerRuntimeCodeHash)
+      && boundTo(identity.quote, deployment.quoteToken.address, deployment.quoteToken.runtimeCodeHash));
     if (!found) throw new OxleyError("UNKNOWN_DEPLOYMENT", "The deployment identity does not match any reviewed curve");
     return found;
   }

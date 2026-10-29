@@ -131,6 +131,17 @@ test("a deployment identity narrows the search but the chain still decides", asy
     await assert.rejects(sdk.resolveMarket(g3.id, { identity: bad }), code("UNKNOWN_DEPLOYMENT"));
   }
 });
+test("a verified-binding identity must also match the reviewed controller and quote token, but not the informational release name", async () => {
+  const { sdk, addMarket } = setup();
+  const g3 = addMarket("gen3", 1), pins = manifests[1]!;
+  const identity = { chainId: 31337, source: "verified-binding", releaseId: "elysium-auctions-gen3-aac49c62c3855f41", curve: pins.curve,
+    controller: { address: pins.auctionController, runtimeCodeHash: pins.auctionBindings.controllerRuntimeCodeHash }, quote: pins.quoteToken };
+  assert.equal((await sdk.resolveMarket(g3.id, { identity })).entry.generation, "gen3");
+  const other = { address: addr(77), runtimeCodeHash: pins.curve.runtimeCodeHash };
+  await assert.rejects(sdk.resolveMarket(g3.id, { identity: { ...identity, controller: other } }), code("UNKNOWN_DEPLOYMENT"));
+  await assert.rejects(sdk.resolveMarket(g3.id, { identity: { ...identity, quote: other } }), code("UNKNOWN_DEPLOYMENT"));
+  await assert.rejects(sdk.resolveMarket(g3.id, { identity: { ...identity, controller: { ...identity.controller, runtimeCodeHash: `0x${"11".repeat(32)}` } } }), code("UNKNOWN_DEPLOYMENT"));
+});
 test("a resolved market is remembered, so later calls read only its own generation", async () => {
   const { sdk, addMarket, state, request } = setup();
   const g8 = addMarket("gen8", 1);

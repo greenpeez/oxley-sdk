@@ -5,7 +5,7 @@ surface, not whole-repository acceptance or a new contract security audit.
 
 ## Current Evidence
 
-- Current markets, terms, integrator fees and Gen8 Dynamic Bids (`0.6.0-next.1`, 2026-10-29): 122 unit/ABI
+- Current markets, terms, integrator fees and Gen8 Dynamic Bids (`0.6.0-next.1`, 2026-10-29): 129 unit/ABI
   tests, the 17 local EVM tests, typecheck, build and the clean-archive consumer check pass. New offline suites cover
   per-generation resolution, quotes and calldata against the full compiled ABIs, terms, the opening-surcharge mirror,
   fee batches (ordering, rounding, caps, tamper and staleness checks) and Dynamic Bids against a modelled hook and CCA.

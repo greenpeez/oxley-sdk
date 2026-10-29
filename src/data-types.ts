@@ -16,6 +16,22 @@ export interface TradeQuery extends DataPageQuery { dealId: DealId; from: number
 export interface CandleQuery { dealId: DealId; interval: CandleInterval; from: number; to: number }
 export interface VolumeQuery { dealId: DealId; asOf: number }
 
+export type DataFeed = "current" | "legacy";
+/** How an observation's block relates to finality: the finalized prefix itself, or the canonical chain tip (`finalizedBlock <= indexedBlock`). */
+export type DataConfirmation = "finalized-prefix" | "canonical-tip";
+/**
+ * One contributing source of a merged response, judged on its own by `isCurrentData`. Fields mirror the envelope's
+ * observation fields; `lagBlocks` is absent on canonical-tip sources.
+ */
+export interface DataSourceObservation {
+  feed: DataFeed;
+  releaseId?: string; candidateHash?: string; bindingFingerprint?: string; generation?: number;
+  indexedBlock?: DecimalString; indexedBlockHash?: string; indexedTimestamp?: number; checkedAt: number;
+  finalizedBlock?: DecimalString; finalizedBlockHash?: string; finalizedTimestamp?: number;
+  latestBlock?: DecimalString | null; latestBlockHash?: string; latestTimestamp?: number | null;
+  freshness: "fresh" | "stale"; readState?: "complete-prefix"; confirmation?: DataConfirmation;
+  headLagBlocks?: DecimalString | null; lagBlocks?: DecimalString; finalityLagBlocks?: DecimalString | null; delayReason?: string | null;
+}
 export interface IndexedData<T> {
   apiVersion: "1";
   source: "indexed";
@@ -29,7 +45,13 @@ export interface IndexedData<T> {
   feedIdentity?:{releaseId:string;candidateHash:string;bindingFingerprint:string;reorgGeneration:number};
   deploymentIdentity?:MarketDeploymentIdentity|null;
   latestBlock?:DecimalString|null;
+  latestBlockHash?:string;
   latestTimestamp?:number|null;
+  /** Absent means a finalized-prefix observation. `canonical-tip` responses omit `lagBlocks`. */
+  confirmation?:DataConfirmation;
+  finalizedBlockHash?:string;
+  /** Merged responses: one observation per contributing source, each with its own freshness. */
+  sources?:DataSourceObservation[];
   finalizedTimestamp?:number;
   headLagBlocks?:DecimalString|null;
   finalityLagBlocks?:DecimalString|null;
@@ -58,6 +80,8 @@ export interface IndexedData<T> {
   items: T[];
 }
 export interface Auction {
+  /** Which feed observed this row (catalog rows of merged responses). */
+  feed?:DataFeed;
   deploymentIdentity?:MarketDeploymentIdentity|null;
   capitalization?: MarketCapitalization | null; protocolObservation?: MarketProtocolObservation | null;
   dealId: DealId; mode: "auction"; auction: DataAddress; coin: DataAddress; creator: DataAddress;
@@ -68,6 +92,7 @@ export interface Auction {
 }
 export interface IndexedBid {
   dealId: DealId; auction: DataAddress; bidId: DecimalString; owner: DataAddress;
+  /** For example `active` or `exited`; treat unknown values as opaque text. */
   maxPriceQ96: DecimalString; amountUnits: DecimalString; status: string;
   tokensFilled: DecimalString; refundedUnits: DecimalString; quoteAsset: DataAddress;
 }
@@ -88,6 +113,7 @@ export type AuctionActivity = AuctionEventBase & (
 );
 export interface AuctionPrice { blockNumber: number; time: number; clearingPriceQ96: DecimalString; cumulativeMps: number }
 export interface IndexedMarket {
+  feed?:DataFeed;
   deploymentIdentity?:MarketDeploymentIdentity|null;
   capitalization?: MarketCapitalization | null; protocolObservation?: MarketProtocolObservation | null;
   dealId: DealId; mode: "reserve"; coin: DataAddress; creator: DataAddress; name: string; symbol: string;
@@ -97,6 +123,8 @@ export interface IndexedMarket {
 export interface IndexedTrade {
   side: "buy" | "sell"; trader: DataAddress; coinAmount: DecimalString; quoteAmount: DecimalString;
   feeAmount: DecimalString; timestamp: number; transactionHash: string; blockNumber: DecimalString; logIndex: number;
+  /** `reward` marks a protocol reward purchase rather than a user's own trade. */
+  origin?: "user" | "reward";
 }
 export interface Candle {
   time: number; openWad: DecimalString; highWad: DecimalString; lowWad: DecimalString;
