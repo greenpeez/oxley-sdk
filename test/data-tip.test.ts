@@ -52,6 +52,17 @@ test("every source of a merged response is current under its own rule", () => {
   assert.equal(current(tip({ sources: [null] })), false);
   assert.equal(current(tip({ freshness: "stale", sources: [fresh] })), false, "the envelope itself must also be current");
 });
+test("a finalized prefix proven to sit on the finalized head may be as old as the 3600 s finality budget; unproven ones keep 180 s", () => {
+  const old = now - 900, proven = (extra: Record<string, unknown> = {}) => prefix({ indexedTimestamp: old, finalizedBlockHash: hash, finalizedTimestamp: old, ...extra });
+  assert.equal(current(proven()), true, "fifteen minutes behind on the finalized head is current");
+  assert.equal(current(tip({ sources: [{ feed: "current", ...tip() }, { feed: "legacy", ...proven() }] })), true, "the merged API's legacy source");
+  assert.equal(current(proven({ indexedTimestamp: now - 3601, finalizedTimestamp: now - 3601 })), false, "beyond the finality stall budget");
+  assert.equal(current(proven({ finalizedBlockHash: `0x${"9".repeat(64)}` })), false, "a different finalized hash proves nothing");
+  assert.equal(current(proven({ finalizedTimestamp: old + 1 })), false, "a different finalized timestamp proves nothing");
+  assert.equal(current(prefix({ indexedTimestamp: old })), false, "without the finalized-head proof the 180 s bound applies");
+  assert.equal(current(proven({ checkedAt: now - 181 })), false, "the check time keeps its 180 s bound");
+  assert.equal(current(proven({ latestTimestamp: now - 181 })), false, "the head time keeps its 180 s bound");
+});
 const envelope = (resource: string, items: unknown[], extra: Record<string, unknown> = {}) => ({ apiVersion: "1", source: "indexed", resource, chainId: 99801,
   releaseId: "example", candidateHash: hash, bindingFingerprint: hash, generation: 0, ...tip(), hasMore: false, nextCursor: null,
   quoteToken: { address, symbol: "Oxy-USDC", decimals: 6 }, items, ...extra });

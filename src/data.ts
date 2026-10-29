@@ -17,12 +17,16 @@ export interface DataClientOptions {
   timeoutMs?: number;
 }
 type Observation = Pick<IndexedData<unknown>, "checkedAt" | "freshness"> & Partial<Pick<IndexedData<unknown>, "indexedTimestamp" | "indexedBlock"
-  | "finalizedBlock" | "lagBlocks" | "latestBlock" | "latestTimestamp" | "indexedBlockHash" | "confirmation" | "finalizedBlockHash" | "latestBlockHash">>;
+  | "finalizedBlock" | "lagBlocks" | "latestBlock" | "latestTimestamp" | "indexedBlockHash" | "confirmation" | "finalizedBlockHash" | "latestBlockHash"
+  | "finalizedTimestamp">>;
 /**
  * Recheck this when rendering retained data; fetching once does not keep it fresh. A finalized-prefix response (no `confirmation`)
  * is current only when the index sits exactly on the finalized block (`lagBlocks` "0"). A `canonical-tip` response is current when
  * it is `fresh`, `finalizedBlock <= indexedBlock` and `lagBlocks` is absent. Either way every timestamp must be within 180 seconds
  * (30 in the future), the head evidence must be consistent, and every `sources[]` entry must be current under its own rule.
+ * Elysium finalizes in steps of about fifteen minutes, so a finalized prefix that proves it sits on the finalized head (same block,
+ * hash and timestamp in `finalizedBlock`/`finalizedBlockHash`/`finalizedTimestamp`) may have an `indexedTimestamp` up to the
+ * 3600 s finality stall budget old, as the API itself rules; its check and head times keep the 180 s bound.
  */
 export function isCurrentData(value: Observation & { sources?: readonly Observation[] }, now = Date.now()): boolean {
   return currentObservation(value, now) && (value.sources === undefined
@@ -35,7 +39,15 @@ function currentObservation(value: Observation, now: number): boolean {
     && recentObservation(value, now) && currentHead(value, now) && hashesValid(value)
     && (mode === "canonical-tip" ? tipFinality(value) : prefixFinality(value));
 }
-const recentObservation = (value: Observation, now: number) => currentTime(value.checkedAt, now) && currentTime(value.indexedTimestamp, now) && decimal(value.indexedBlock);
+/** Elysium's finality stall budget, in ms: the API's bound for the age of a block proven to be the finalized head. */
+const FINALITY_STALL_MS = 3_600_000;
+const recentObservation = (value: Observation, now: number) => currentTime(value.checkedAt, now)
+  && currentTime(value.indexedTimestamp, now, provenFinalizedPrefix(value) ? FINALITY_STALL_MS : 180_000) && decimal(value.indexedBlock);
+function provenFinalizedPrefix(value: Observation) {
+  return value.confirmation !== "canonical-tip" && value.indexedBlock === value.finalizedBlock && canonicalHash(value.indexedBlockHash)
+    && canonicalHash(value.finalizedBlockHash) && value.finalizedBlockHash?.toLowerCase() === value.indexedBlockHash?.toLowerCase()
+    && Number.isSafeInteger(value.finalizedTimestamp) && value.finalizedTimestamp === value.indexedTimestamp;
+}
 const hashesValid = (value: Observation) => canonicalHash(value.indexedBlockHash)
   && [value.finalizedBlockHash, value.latestBlockHash].every(hash => hash === undefined || canonicalHash(hash));
 const prefixFinality = (value: Observation) => value.lagBlocks === "0" && value.finalizedBlock === value.indexedBlock;
@@ -45,8 +57,8 @@ function currentHead(value:{latestBlock?:string|null;latestTimestamp?:number|nul
   return typeof value.latestBlock==="string"&&/^\d+$/.test(value.latestBlock)
     &&BigInt(value.latestBlock)>=BigInt(value.indexedBlock!)&&currentTime(value.latestTimestamp,now);
 }
-function currentTime(value:unknown,now:number) {
-  return integer(value) && Number(value)*1000 <= now+30_000 && now-Number(value)*1000<=180_000;
+function currentTime(value:unknown,now:number,maxAgeMs=180_000) {
+  return integer(value) && Number(value)*1000 <= now+30_000 && now-Number(value)*1000<=maxAgeMs;
 }
 export function createOxleyDataClient(options:DataClientOptions) {
   const root=dataRoot(options);
