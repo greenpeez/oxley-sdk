@@ -6,6 +6,7 @@ import { gen8AdapterAbi, ccaCheckpointAbi } from "./gen8-abis.js";
 import { acceptedBidFee, bidRefusal, GEN8_MIN_BID, type Gen8Refusal } from "./gen8-bid-rules.js";
 import { buildDynamicBid, buildDynamicRebid, type BidWitness } from "./gen8-bid-transactions.js";
 import { address, check, hash, OxleyError, uint } from "./validation.js";
+import { GEN8_FAMILY_NAMES } from "./gen8-family.js";
 import type { RpcClient, Transaction } from "./types.js";
 import type { AuctionContext } from "./auction-context.js";
 import type { AuctionReader } from "./auction-state.js";
@@ -92,7 +93,7 @@ export function createDynamicBidPreparer(context: AuctionContext, auctions: Auct
     await rpc.call({ ...ready.transaction, account: input.caller, blockNumber: ready.blockNumber });
   }
   async function prepare(input: DynamicBidRequest, rebidOf?: bigint) {
-    check(context.gen8, "GEN8_REQUIRED", "Dynamic Bids exist only on Gen8 deployments");
+    check(context.gen8Family, "GEN8_REQUIRED", `Dynamic Bids exist only on ${GEN8_FAMILY_NAMES} deployments`);
     hash(input.dealId); address(input.caller); uint(input.entered); uint(input.maxPriceQ96);
     check(input.entered >= GEN8_MIN_BID, "BID_TOO_LOW", REFUSALS.minimum[1]);
     const at = await anchor(), { hook, auction } = await auctions.resolveAt(input.dealId, at), blockNumber = at.blockNumber;

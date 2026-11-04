@@ -8,9 +8,10 @@ export type { SwapFeeRequest } from "./client-fee-swaps.js";
 export { buildAcceptTerms, type TermsStatus } from "./client-terms.js";
 export { openingSurchargeWadAt, openingSurchargeAmount, buyFeeBps, OPENING_SURCHARGE_START_WAD, OPENING_SURCHARGE_SECONDS,
   STANDARD_TRADING_FEE_BPS } from "./opening-fee.js";
-export { testnetDeployments, flatFeeTestnetDeployment, gen3TestnetDeployment, gen8TestnetDeployment } from "./testnet-deployments.js";
+export { testnetDeployments, flatFeeTestnetDeployment, gen3TestnetDeployment, gen8TestnetDeployment, gen9TestnetDeployment } from "./testnet-deployments.js";
+export { GEN8_FAMILY, GEN8_FAMILY_IDS, GEN9_MAX_FLOOR_PRICE_WAD, isGen8Family, gen8FamilyMember, type Gen8FamilyId, type Gen8FamilyMember } from "./gen8-family.js";
 export { parseDeployment, deploymentGeneration, OxleyError } from "./validation.js";
 export { decodeOxleyRevert, type OxleyRevert, type OxleyRevertName } from "./revert.js";
-export { curveAbi, registryAbi, tokenAbi, termsRegistryAbi, openingFeeCurveAbi, gen8CurveAbi } from "./abis.js";
+export { curveAbi, registryAbi, tokenAbi, termsRegistryAbi, openingFeeCurveAbi, gen8CurveAbi, launchFloorCapAbi } from "./abis.js";
 export type * from "./types.js";
 export * from "./market-observations.js";

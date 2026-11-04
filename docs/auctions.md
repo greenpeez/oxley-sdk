@@ -231,6 +231,16 @@ unchanged: they target the resolved CCA, and delivery on Gen8 is keeper-driven. 
 are rejected (`UNSUPPORTED_GENERATION`): no Gen3 auction accepts new bids. Gen8 launches use their
 own creator account and are not prepared by `/launch`.
 
+**Gen9** is the Gen8 contract stack redeployed unchanged except for the launch controller, which reverts
+`FloorPriceAboveMaximum(uint256,uint256)` for a floor above 1e21 (`GEN9_MAX_FLOOR_PRICE_WAD`, in the
+controller's `floorPriceWad` units) and exposes `MAX_FLOOR_PRICE_WAD()`. A manifest with `"generation": "gen9"`
+takes the same code paths as Gen8 (same bid rules, hook, router, witnesses and error codes), including the
+`GEN8_REQUIRED` and `DYNAMIC_BID_REQUIRED` checks, and keeps its own release and addresses; Gen8 auctions are unaffected.
+`verifyDeployment` of a Gen9 manifest also reads `MAX_FLOOR_PRICE_WAD()` on the pinned controller and refuses any other
+value. `decodeOxleyRevert` turns `FloorPriceAboveMaximum` into a short message; the error and getter are the hand-declared
+fragment `launchFloorCapAbi`. The Gen9 manifest `deployments/elysium-testnet-gen9.json` is bundled once the reviewed
+live deployment exists.
+
 Gen8 currently has no active auction (its first, G8TEST, failed), so the live check
 `npm run test:live:markets` verifies the Gen8 graph, its bindings and the hook's compiled rules, while bid
 preparation itself is covered by the offline suite against a modelled hook and CCA.

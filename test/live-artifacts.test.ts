@@ -7,6 +7,7 @@ import { termsRegistryAbi, openingFeeCurveAbi, gen8CurveAbi, gen8BidRouterAbi, g
   registryAbi, oxleyRevertAbi } from "../src/abis.js";
 import { full, read } from "./support/chain.js";
 import { matches } from "./support/abi.js";
+import { scripts } from "./support/manifests.js";
 
 const sha = (data: string | Uint8Array) => createHash("sha256").update(data).digest("hex");
 const pkg = JSON.parse(read("package.json")), evidence = JSON.parse(read("docs/live-artifacts.json"));
@@ -49,11 +50,16 @@ test("the Gen8 manifest is the production record mapped role by role, and Gen3 k
   // Gen2 is deliberately not bundled: its 14 auctions all failed, so no market exists on its curve.
   assert.equal(JSON.parse(read("deployments/elysium-testnet-gen2.json")).status, "planned-fork-addresses");
 });
-test("every exported path exists and the changelog and README describe the released version", () => {
+test("every exported path exists (a manifest that is not required yet may be absent) and the changelog and README describe the released version", () => {
+  const optional = new Set(scripts.MANIFESTS.filter(entry => !entry.required).map(entry => `./${entry.file}`));
   for (const [path, target] of Object.entries(pkg.exports as Record<string, unknown>)) {
-    for (const file of typeof target === "string" ? [target] : [] as string[]) assert.ok(existsSync(new URL(`../${file}`, import.meta.url)), `${path} -> ${file}`);
+    for (const file of typeof target === "string" ? [target] : [] as string[]) {
+      assert.ok(existsSync(new URL(`../${file}`, import.meta.url)) || optional.has(path), `${path} -> ${file}`);
+    }
   }
-  assert.equal(pkg.version, "0.6.0-next.1");
-  assert.match(read("CHANGELOG.md"), new RegExp(`^# Changelog\\n\\n## ${pkg.version.replace(/\./g, "\\.")} - `));
+  assert.ok(optional.has("./deployments/elysium-testnet-gen9.json") && pkg.exports["./deployments/elysium-testnet-gen9.json"]);
+  assert.equal(pkg.version, "0.6.0-next.2");
+  // An "Unreleased" section may sit above the released version's section.
+  assert.match(read("CHANGELOG.md"), new RegExp(`^# Changelog\\n\\n(?:## Unreleased\\n[\\s\\S]*?\\n\\n)?## ${pkg.version.replace(/\./g, "\\.")} - `));
   assert.match(read("README.md"), new RegExp(`version \`${pkg.version.replace(/\./g, "\\.")}\``));
 });

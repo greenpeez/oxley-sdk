@@ -195,5 +195,8 @@ export const gen8TestnetDeployment = {
   }
 } as const;
 
+// deployments/elysium-testnet-gen9.json is absent: gen9TestnetDeployment is undefined and not part of testnetDeployments until the reviewed manifest is added and `npm run embed` is run.
+export const gen9TestnetDeployment = undefined;
+
 /** Reviewed testnet generations, oldest first: flat-fee and Gen3 hold markets, Gen8 is the current launch generation. Gen2 is not bundled: its 14 auctions all failed, so its curve holds no market (checked 2026-10-29). */
 export const testnetDeployments = [flatFeeTestnetDeployment, gen3TestnetDeployment, gen8TestnetDeployment] as const;

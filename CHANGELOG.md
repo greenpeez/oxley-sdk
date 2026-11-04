@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.6.0-next.2 - 2026-11-04
+
+Adds token details to the data client: name, symbol, description, social links and image for any number of markets. Existing
+resources, exports and validation behave as before. This change deploys no contracts and broadcasts no transactions.
+
+- Data API: `data.tokens({ ids })` reads the public `tokens` resource (`GET /api/data/v1/tokens?ids=`, at most 50 IDs per request).
+  The client lowercases and de-duplicates the IDs, sends batches of 50 (four requests at a time, no further group after a failure) and
+  returns one `IndexedData<TokenInfo>` in the order asked. Its observation is the oldest batch's, so `isCurrentData` never rates the
+  merge fresher than its least fresh part. A market the API does not list (unknown, or a retired auction) is absent from `items`:
+  compare with the IDs you asked for. A malformed ID, or an empty list, is `INVALID_QUERY` before any request.
+- `TokenInfo` (`chainId`, `dealId`, `coin`, `creator`, `name`, `symbol`, `description`, `website`, `x`, `telegram`, `image`,
+  `metadataRevision`, `metadataUpdatedAt`), `TokenImage` (`cid`, `url`) and `TokenQuery`. `name` and `symbol` come from the market
+  index; a market whose creator has saved nothing has `""` text fields, `image: null` and revision and update time `0`.
+- Validation: an item must be one of the requested markets and appear once (`DATA_IDENTITY_MISMATCH`); links are `""` or `https://`,
+  the image URL is `https://` (or `http://` on localhost), and the description is at most 2,000 characters (`INVALID_RESPONSE`).
+  The fields are creator-written text: render them as text, never as markup.
+- Documentation: `docs/data-api.md` (the resource, caching and rate guidance) and the README data section.
+
+Gen9 support. Gen9 is the Gen8 contract stack redeployed unchanged except for the launch controller,
+which caps the floor price. It runs beside Gen8; existing Gen8 auctions, manifests, ABIs, bid rules and error codes behave as before.
+This change deploys no contracts and broadcasts no transactions.
+
+- Gen8 family: `src/gen8-family.ts` is the one table of generations that share the Gen8 code paths (`GEN8_FAMILY`,
+  `GEN8_FAMILY_IDS`, `isGen8Family`, `gen8FamilyMember`, `Gen8FamilyId`). Manifest validation, the auctions client and its
+  verification, Dynamic Bids, curve views and calldata, the opening-surcharge and terms rules, revert wording and the launch
+  client's refusal route through it instead of comparing `"gen8"`. Each member keeps its own generation id, release-ID prefix and
+  manifest file; Gen9 never reuses Gen8's identity.
+- `DeploymentGeneration` accepts `"gen9"`. A Gen9 manifest has the Gen8 shape: `generation: "gen9"`, a `termsRegistry` pin, the
+  `bidHook` and `exposureHelper` pins and the exact compiled `bidRules` record the SDK mirrors (the Gen8 rules, unchanged). `createOxleyMarkets({ deployments })`
+  routes a Gen9 manifest beside Gen8, `client("gen9")` selects it, and error codes such as `GEN8_REQUIRED` and `DYNAMIC_BID_REQUIRED`
+  keep their names; their messages now say "Gen8 or Gen9".
+- Floor cap: the Gen9 launch controller reverts `FloorPriceAboveMaximum(uint256,uint256)` when the floor exceeds
+  `GEN9_MAX_FLOOR_PRICE_WAD` (1e21, in `floorPriceWad` units) and exposes `MAX_FLOOR_PRICE_WAD()`. `decodeOxleyRevert` decodes the
+  error into a USDC floor message (`OxleyRevertName` gains `FloorPriceAboveMaximum`; args are the requested floor and the maximum).
+  The error and getter are the hand-declared fragment `launchFloorCapAbi` (`/abis`, `/auctions`, `/launch`), because the Gen8-family
+  controller ABI is not shipped here; `oxleyRevertAbi` is unchanged. Signature and parameter names (`floorPriceWad`, `maximum`) match the compiled Gen9 controller.
+  Verifying a Gen9 auction deployment reads `MAX_FLOOR_PRICE_WAD()` on the pinned controller and fails closed
+  (`AUCTION_BINDING_MISMATCH`) unless it is exactly 1e21; Gen8 reads nothing new.
+- Manifest plumbing: `@oxley/sdk/deployments/elysium-testnet-gen9.json` is an export, and `gen9TestnetDeployment` is exported. Until the
+  reviewed live manifest exists the file is absent, `gen9TestnetDeployment` is `undefined` and `testnetDeployments` stays flat-fee, Gen3,
+  Gen8. Adding the file and running `npm run embed` bundles it and appends it to `testnetDeployments`. `scripts/deployment-manifests.mjs`
+  is the shared table: `embed-deployments` refuses a manifest whose generation or release-ID prefix does not match its slot,
+  `import-live-manifests` maps a Gen9 production record with the Gen8 mapping when given `--gen9-record` and `--gen9-sha256`, and
+  `check-package` expects the Gen9 file in the package exactly when it exists.
+
 ## 0.6.0-next.1 - 2026-10-29
 
 Reaches every current market (flat-fee, Gen3, Gen8), adds terms acceptance, integrator fees and Gen8

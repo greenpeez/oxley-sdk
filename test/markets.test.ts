@@ -22,7 +22,8 @@ test("bundled manifests are verbatim copies of the reviewed JSON and parse as th
   const files = ["elysium-testnet", "elysium-testnet-gen3", "elysium-testnet-gen8"];
   [flatFeeTestnetDeployment, gen3TestnetDeployment, gen8TestnetDeployment].forEach((embedded, index) =>
     assert.deepEqual(JSON.parse(read(`deployments/${files[index]}.json`)), embedded, files[index]!));
-  const parsed = testnetDeployments.map(item => parseDeployment(item));
+  // The first three are the released set; a bundled Gen9 (once its manifest exists) is checked in gen8-family.test.ts.
+  const parsed = testnetDeployments.slice(0, 3).map(item => parseDeployment(item));
   assert.deepEqual(parsed.map(deploymentGeneration), ["flat-fee", "gen3", "gen8"]);
   assert.ok(parsed.every(item => item.chainId === 99801 && item.network === "testnet"));
   assert.deepEqual(parsed.map(item => item.curve.address), ["0x18bf92514c0d749a017aaf69153442703e1a966b",
@@ -78,7 +79,7 @@ test("collateral-returning sells stay rejected on Gen3 and buys paused on Gen8 r
 });
 test("swap calldata matches the full compiled ABI of each curve (Gen8 sell has four arguments)", async () => {
   const { sdk, addMarket, request } = setup();
-  const abis: Record<Generation, string> = { "flat-fee": "ElysiumReserveCurveVNext", gen3: "ElysiumReserveCurveGen3", gen8: "ElysiumCurveGen8" };
+  const abis: Record<Generation, string> = { "flat-fee": "ElysiumReserveCurveVNext", gen3: "ElysiumReserveCurveGen3", gen8: "ElysiumCurveGen8", gen9: "ElysiumCurveGen8" };
   for (const generation of GENERATIONS) {
     const market = addMarket(generation, GENERATIONS.indexOf(generation) + 1), abi = full(abis[generation]);
     const buy = await sdk.prepareSwap({ ...request(market.id, market.coin, "buy"), slippageBps: 100 });
@@ -169,6 +170,6 @@ test("a router needs distinct reviewed releases on one chain", () => {
   assert.throws(() => createOxleyMarkets({ publicClient: rpc, deployments: [] }), code("INVALID_DEPLOYMENT"));
   assert.throws(() => createOxleyMarkets({ publicClient: rpc, deployments: [manifests[0], manifests[0]] }), code("INVALID_DEPLOYMENT"));
   assert.throws(() => createOxleyMarkets({ publicClient: rpc, deployments: [manifests[0], { ...manifest("gen3", 10), chainId: 1 }] }), code("INVALID_DEPLOYMENT"));
-  assert.equal(createOxleyMarkets({ publicClient: rpc }).generations.length, 3);
+  assert.equal(createOxleyMarkets({ publicClient: rpc }).generations.length, testnetDeployments.length);
   assert.equal(createOxleyClient({ publicClient: rpc, deployment: manifests[2] }).deployment.generation, "gen8");
 });

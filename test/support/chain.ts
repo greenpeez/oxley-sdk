@@ -10,7 +10,9 @@ export const pin = (n: number) => ({ address: addr(n), runtimeCodeHash: keccak25
 export const full = (name: string) => JSON.parse(readFileSync(new URL(`../../abis/${name}.json`, import.meta.url), "utf8")) as Abi;
 export const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 
-export type Generation = "flat-fee" | "gen3" | "gen8";
+export type Generation = "flat-fee" | "gen3" | "gen8" | "gen9";
+/** Gen8 and Gen9 run one contract stack. Kept as its own literal pair so the tests do not lean on the SDK's family helper. */
+export const isQuoteOnly = (generation: Generation) => generation === "gen8" || generation === "gen9";
 /** Synthetic manifest: addresses `base+1..base+9`, the quote token (3) shared like the real graph. */
 export function manifest(generation: Generation, base: number, extra: Record<string, unknown> = {}) {
   const terms = generation !== "flat-fee";
@@ -19,11 +21,22 @@ export function manifest(generation: Generation, base: number, extra: Record<str
     curve: pin(base + 1), registry: pin(base + 2), quoteToken: { ...pin(3), decimals: 6, symbol: "Oxy-USDC" }, auctionController: addr(base + 4),
     ...terms ? { termsRegistry: pin(base + 5) } : {},
     auctionBindings: { controllerRuntimeCodeHash: keccak256(runtime), bidRouter: pin(base + 6), adapter: pin(base + 7),
-      ...generation === "gen8" ? { bidHook: pin(base + 8), exposureHelper: pin(base + 9) } : {} },
-    ...generation === "gen8" ? { bidRules: { version: "8", minBid: "20000000", tokenCap: "30000000000000000000000000", liveBids: 3,
+      ...isQuoteOnly(generation) ? { bidHook: pin(base + 8), exposureHelper: pin(base + 9) } : {} },
+    ...isQuoteOnly(generation) ? { bidRules: { version: "8", minBid: "20000000", tokenCap: "30000000000000000000000000", liveBids: 3,
       walletBids: 12, hookMaxBids: 0, capacityMaxBids: 0, maxPriceLevels: 1000 } } : {}, ...extra };
 }
-export const BASES: Record<Generation, number> = { "flat-fee": 0, gen3: 10, gen8: 20 };
+export const BASES: Record<Generation, number> = { "flat-fee": 0, gen3: 10, gen8: 20, gen9: 40 };
+
+/** The checked-in Gen9 fixture manifest: placeholder addresses and runtime hashes; its Oxy-USDC pin is Gen8's. */
+export const gen9Fixture = () => JSON.parse(read("test/fixtures/elysium-testnet-gen9.fixture.json")) as ReturnType<typeof manifest>;
+/**
+ * A manifest the offline RPC double can verify: every runtime code hash is the double's, and the chain ID and start block are its own.
+ * Addresses, generation, release and bindings are untouched.
+ */
+export const mockVerifiable = <T>(deployment: T): T => JSON.parse(JSON.stringify(deployment), (key, value: unknown) => {
+  if (key === "runtimeCodeHash" || key === "controllerRuntimeCodeHash") return keccak256(runtime);
+  return key === "chainId" ? 31337 : key === "startBlock" ? "1" : value;
+}) as T;
 
 export interface ReadCall { address: Address; functionName: string; args: readonly unknown[]; blockNumber: bigint }
 export interface MockState {

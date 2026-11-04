@@ -6,12 +6,13 @@ import { termsRegistryAbi } from "./gen3-abis.js";
 import { GEN8_BID_RULES, bidsRemaining, liveBids, maximumNewBid, type Gen8Position } from "./gen8-bid-rules.js";
 import type { BidWitness } from "./gen8-bid-transactions.js";
 import { loadWitnesses } from "./gen8-witnesses.js";
+import { GEN8_FAMILY_NAMES } from "./gen8-family.js";
 import { address, check, hash, sameAddress } from "./validation.js";
 import type { Anchor } from "./types.js";
 import type { AuctionContext } from "./auction-context.js";
 import type { AuctionReader } from "./auction-state.js";
 
-/** A wallet's standing on one Gen8 auction at one block, as the bid hook will count it. Amounts are Oxy-USDC base units. */
+/** A wallet's standing on one Gen8-family auction at one block, as the bid hook will count it. Amounts are Oxy-USDC base units. */
 export interface DynamicBidLimits extends Anchor {
   readonly dealId: Hex; readonly auction: Address; readonly owner: Address;
   /** The clearing price after the checkpoint a new bid would take: it decides which bids are outbid. */
@@ -73,9 +74,9 @@ export function createDynamicWallet(context: AuctionContext, auctions: AuctionRe
       creatorExcluded, termsAccepted, minimumBid: BigInt(GEN8_BID_RULES.minBid), ...limits, balance, maximumBid,
       liveBids: liveBids(positions), bidsLeft: creatorExcluded ? 0 : bidsRemaining(positions), positions: Object.freeze(positions), rules: GEN8_BID_RULES }) };
   }
-  /** Wallet limits for a Gen8 auction, read at one block: the same numbers the hook enforces, for forms and pre-checks. */
+  /** Wallet limits for a Gen8-family auction, read at one block: the same numbers the hook enforces, for forms and pre-checks. */
   async function getDynamicBidLimits(input: { dealId: Hex; owner: Address }): Promise<DynamicBidLimits> {
-    check(context.gen8, "GEN8_REQUIRED", "Dynamic Bid limits exist only on Gen8 deployments");
+    check(context.gen8Family, "GEN8_REQUIRED", `Dynamic Bid limits exist only on ${GEN8_FAMILY_NAMES} deployments`);
     hash(input.dealId); address(input.owner);
     const at = await anchor(), { hook, auction } = await auctions.resolveAt(input.dealId, at);
     const { limits } = await walletAt(input.dealId, auction.auction, hook, input.owner, at);

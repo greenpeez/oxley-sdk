@@ -1,10 +1,11 @@
 import {integer} from "./data-validation.js";
 import {dataReader} from "./data-request.js";
 import {dataRoot} from "./data-options.js";
+import {readTokens} from "./data-tokens.js";
 export {DataApiError} from "./data-errors.js";
 import type { Auction, AuctionActivity, AuctionActivityQuery, AuctionPrice, AuctionPriceQuery, AuctionQuery,
   BidQuery, CandleQuery, CandleSeries, DataRequestOptions, IndexedBid, IndexedData, IndexedMarket,
-  IndexedTrade, MarketQuery, MarketVolume, TradeQuery, VolumeQuery } from "./data-types.js";
+  IndexedTrade, MarketQuery, MarketVolume, TokenInfo, TokenQuery, TradeQuery, VolumeQuery } from "./data-types.js";
 export type * from "./data-types.js";
 
 export interface DataClientOptions {
@@ -72,6 +73,8 @@ export function createOxleyDataClient(options:DataClientOptions) {
     trades: (query: TradeQuery, request?: DataRequestOptions) => get<IndexedTrade>("trades", query, request),
     candles: (query: CandleQuery, request?: DataRequestOptions) => get<CandleSeries>("candles", query, request),
     volume: (query: VolumeQuery, request?: DataRequestOptions) => get<MarketVolume>("volume", query, request),
+    /** Name, symbol, description, socials and image for any number of deal IDs, read 50 per request and merged (see `readTokens`). */
+    tokens: (query: TokenQuery, request?: DataRequestOptions): Promise<IndexedData<TokenInfo>> => readTokens(get, query, request),
   };
 }
 export type OxleyDataClient = ReturnType<typeof createOxleyDataClient>;

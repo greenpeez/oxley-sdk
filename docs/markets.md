@@ -22,6 +22,11 @@ Manifests: `deployments/elysium-testnet.json`, `elysium-testnet-gen3.json` and
 `elysium-testnet-gen8.json`, each verified by runtime code hash exactly like the original
 flat-fee manifest. They are bundled as `testnetDeployments`, so no file access is needed.
 
+`gen9` is the Gen8 contract stack redeployed with a cap on the launch floor price. It trades exactly like
+Gen8 (same views, calldata, terms and gate) and runs beside it. Its manifest
+`deployments/elysium-testnet-gen9.json` is added to the bundle once the reviewed live deployment exists;
+until then `gen9TestnetDeployment` is `undefined` and a Gen9 manifest can be passed in `deployments`.
+
 Not supported, and why:
 
 - **Gen2** (`elysium-auctions-gen2-4f28738faf30190d`): all 14 of its auctions failed, so its
@@ -43,7 +48,7 @@ const markets = createOxleyMarkets({
 });
 await markets.verifyDeployments(); // pins, bindings, terms registry, decimals for every generation
 
-const { market, entry } = await markets.resolveMarket(dealId); // entry.generation: 'flat-fee' | 'gen3' | 'gen8'
+const { market, entry } = await markets.resolveMarket(dealId); // entry.generation: 'flat-fee' | 'gen3' | 'gen8' (| 'gen9' once its manifest is bundled)
 const swap = await markets.prepareSwap({ marketId: dealId, tokenIn: market.quoteToken, tokenOut: market.coin,
   amountIn: 10_000_000n, caller: wallet, slippageBps: 50 });
 const funding = await markets.checkSwap(swap); // routed by swap.quote.releaseId
@@ -78,7 +83,7 @@ events from its start block, at most 10,000 blocks per page per generation, and 
 
 ## What Differs By Generation
 
-| | flat-fee | Gen3 | Gen8 |
+| | flat-fee | Gen3 | Gen8 (and Gen9) |
 | --- | --- | --- | --- |
 | `quoteBuy` / `quoteSell` | `(id, amount, account)`; sell returns a collateral leg | same | `(id, amount)`; no account, no collateral leg |
 | `sell` arguments | `id, coinIn, minQuote, minCollateral, deadline` | same | `id, coinIn, minQuote, deadline` |
@@ -88,7 +93,7 @@ events from its start block, at most 10,000 blocks per page per generation, and 
 | Opening surcharge on buys | no | yes | yes |
 
 The SDK selects views and calldata from the market's generation (`market.generation`), and
-`buildSwap` encodes by the quote's market, so a Gen8 quote can never produce a five-argument
+`buildSwap` encodes by the quote's market, so a Gen8 or Gen9 quote can never produce a five-argument
 sell. Quotes come from the curve's own views; the SDK never re-implements pricing. A Gen3
 sell quote with a collateral leg is refused (`COLLATERAL_OUTPUT`), as before.
 

@@ -1,7 +1,10 @@
 import type { Address, Hex } from "viem";
-import { addr, BASES, id32, mockRpc, type Generation, type ReadCall } from "./chain.js";
+import { addr, BASES, id32, isQuoteOnly, mockRpc, type Generation, type ReadCall } from "./chain.js";
 
+/** The three generations bundled with 0.6.0-next.1. */
 export const GENERATIONS: Generation[] = ["flat-fee", "gen3", "gen8"];
+/** The bundled generations plus Gen9, which the SDK supports but does not bundle until its manifest exists. */
+export const ALL_GENERATIONS: Generation[] = [...GENERATIONS, "gen9"];
 const QUOTE = addr(3), ZERO = addr(0);
 interface Market { generations: Generation[]; coin: Address; creator: Address; active: boolean }
 export interface TermsState { required: bigint; latest: bigint; hash: Hex; uri: string; accepted: Map<string, bigint>; hasAcceptedOverride?: boolean }
@@ -32,7 +35,7 @@ function token(w: State, call: ReadCall): unknown {
   return (handlers[call.functionName] ?? (() => { throw new Error(`Unexpected token read ${call.functionName}`); }))();
 }
 function curveMarket(w: State, generation: Generation, id: Hex | undefined) {
-  const market = own(w, generation, id), reserve = generation === "gen8" ? {} : { reserveAsset: market ? QUOTE : ZERO };
+  const market = own(w, generation, id), reserve = isQuoteOnly(generation) ? {} : { reserveAsset: market ? QUOTE : ZERO };
   return market ? { coin: market.coin, creator: market.creator, activatedAt: 100n, active: market.active, ...reserve }
     : { coin: ZERO, creator: ZERO, activatedAt: 0n, active: false, ...reserve };
 }
@@ -41,13 +44,13 @@ function curve(w: State, generation: Generation, call: ReadCall): unknown {
   const quoteBuy = () => {
     if (w.paused) throw new Error("BuysPaused");
     w.quoted.push({ side: "buy", amount });
-    if (generation !== "gen8") w.quoteCallers.push(who);
+    if (!isQuoteOnly(generation)) w.quoteCallers.push(who);
     return [w.buy.out, w.buy.fee];
   };
   const quoteSell = () => {
     w.quoted.push({ side: "sell", amount });
-    if (generation !== "gen8") w.quoteCallers.push(who);
-    return generation === "gen8" ? [w.sell.out, w.sell.fee] : [w.sell.out, w.sell.collateral, w.sell.fee];
+    if (!isQuoteOnly(generation)) w.quoteCallers.push(who);
+    return isQuoteOnly(generation) ? [w.sell.out, w.sell.fee] : [w.sell.out, w.sell.collateral, w.sell.fee];
   };
   const handlers: Record<string, () => unknown> = {
     quoteAsset: () => QUOTE, termsRegistry: () => w.curveTerms.get(generation) ?? addr(BASES[generation] + 5),
@@ -75,7 +78,7 @@ function readWorld(w: State, call: ReadCall): unknown {
   const failure = w.failures.get(`${call.address.toLowerCase()}:${call.functionName}`);
   if (failure) throw failure;
   if (call.address === QUOTE || (BigInt(call.address) >= 100n && BigInt(call.address) < 200n)) return token(w, call);
-  for (const generation of GENERATIONS) {
+  for (const generation of ALL_GENERATIONS) {
     const base = BASES[generation];
     if (call.address === addr(base + 1)) return curve(w, generation, call);
     if (call.address === addr(base + 2)) return registry(w, generation, call);
@@ -84,7 +87,7 @@ function readWorld(w: State, call: ReadCall): unknown {
   throw new Error(`Unexpected read ${call.address} ${call.functionName}`);
 }
 
-/** A small model of three curves that answers the views the SDK reads. Every knob is a plain field a test can change. */
+/** A small model of the curves (flat-fee, Gen3, Gen8 and Gen9; a test registers the ones it needs) that answers the views the SDK reads. Every knob is a plain field a test can change. */
 export function createWorld() {
   const w = newState();
   const coinOf = (n: number) => addr(100 + n);

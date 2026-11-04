@@ -1,10 +1,13 @@
 import { decodeErrorResult, formatUnits, type Hex } from "viem";
 import { oxleyRevertAbi } from "./gen2-abis.js";
+import { launchFloorCapAbi } from "./gen9-abis.js";
+import { isGen8Family } from "./gen8-family.js";
+import type { DeploymentGeneration } from "./types.js";
 
 export type OxleyRevertName = "WalletCapExceeded" | "CreatorBidNotAllowed" | "AuctionNotRegistered" | "TradingNotOpen"
   | "ExactDurationRequired" | "InvalidDurationBlocks" | "InvalidRequestedHours" | "TermsNotAccepted" | "BuysPaused" | "MinimumNotMet"
   | "DeadlineExpired" | "QuoteDust" | "CapitalShortfall" | "WalletBidLimitReached" | "BidAmountTooLow" | "PriceLevelLimit"
-  | "BidPriceTooHigh" | "InvalidWitness" | "BidExpired" | "NotBidOwner" | "BidNotOutbid" | "RebidPriceTooLow";
+  | "BidPriceTooHigh" | "InvalidWitness" | "BidExpired" | "NotBidOwner" | "BidNotOutbid" | "RebidPriceTooLow" | "FloorPriceAboveMaximum";
 export interface OxleyRevert {
   readonly name: OxleyRevertName;
   readonly args: readonly unknown[];
@@ -30,16 +33,18 @@ function candidates(value: unknown, out: Hex[], depth = 0): Hex[] {
   }
   return out;
 }
+/** The released rule errors plus the Gen9 launch controller's floor cap error, which has no compiled ABI in this package. */
+const revertAbi = [...oxleyRevertAbi, ...launchFloorCapAbi] as const;
 function decodeResult(data: Hex) {
-  try { return decodeErrorResult({ abi: oxleyRevertAbi, data }); } catch { return null; }
+  try { return decodeErrorResult({ abi: revertAbi, data }); } catch { return null; }
 }
 type Args = readonly unknown[];
 interface RevertContext { symbol: string; generation?: string }
-/** Dynamic Bids (Gen8) have no breadth rule: the same error means the wallet's own ceiling or token cap. */
+/** Dynamic Bids (the Gen8 family) have no breadth rule: the same error means the wallet's own ceiling or token cap. */
 const dynamicCapMessage = (remaining: bigint, symbol: string) => remaining > 0n
   ? `You can bid up to ${formatUnits(remaining, 6)} ${symbol} more on this auction` : "This wallet has reached its limit on this auction";
 const MESSAGES: Partial<Record<OxleyRevertName, (args: Args, context: RevertContext) => string>> = {
-  WalletCapExceeded: (args, { symbol, generation }) => generation === "gen8" ? dynamicCapMessage(args[2] as bigint, symbol) : walletCapMessage(args[2] as bigint, symbol),
+  WalletCapExceeded: (args, { symbol, generation }) => isGen8Family(generation) ? dynamicCapMessage(args[2] as bigint, symbol) : walletCapMessage(args[2] as bigint, symbol),
   CreatorBidNotAllowed: () => "Creators can't bid on their own auction",
   AuctionNotRegistered: () => "This auction is not registered with the bid rules and cannot accept bids",
   TradingNotOpen: args => tradingNotOpenMessage(args[1] as bigint),
@@ -61,6 +66,8 @@ const MESSAGES: Partial<Record<OxleyRevertName, (args: Args, context: RevertCont
   NotBidOwner: () => "Only the bid's owner can rebid it",
   BidNotOutbid: () => "Only an outbid bid can be rebid",
   RebidPriceTooLow: () => "A rebid must be priced above the current clearing price",
+  // Owner-supplied signature FloorPriceAboveMaximum(uint256,uint256): args are the requested floor and the maximum, both in floorPriceWad units.
+  FloorPriceAboveMaximum: (args, { symbol }) => `The ${symbol} floor price is above the maximum this release allows; use a floor of at most ${args[1]} (floorPriceWad units)`,
 };
 function explainRevert(result: NonNullable<ReturnType<typeof decodeResult>>, context: RevertContext): OxleyRevert | null {
   const name = result.errorName as OxleyRevertName, explain = MESSAGES[name];
@@ -78,11 +85,12 @@ function decode(data: Hex, context: RevertContext, depth: number): OxleyRevert |
   return explainRevert(result, context);
 }
 /**
- * Pure decoder for Oxley rule reverts (Gen2 auctions and gate, Gen3/Gen8 terms and curve trades, Gen8 Dynamic Bids). Accepts raw
- * revert data or a viem/EIP-1193 error object and returns null for anything else (including unrelated custom errors). Never
- * performs RPC calls. Pass `generation: "gen8"` so a shared error such as `WalletCapExceeded` is worded for that generation.
+ * Pure decoder for Oxley rule reverts (Gen2 auctions and gate, Gen3 and Gen8-family terms and curve trades, Dynamic Bids, and the
+ * Gen9 launch floor cap). Accepts raw revert data or a viem/EIP-1193 error object and returns null for anything else (including
+ * unrelated custom errors). Never performs RPC calls. Pass `generation: "gen8"` or `"gen9"` so a shared error such as
+ * `WalletCapExceeded` is worded for that generation.
  */
-export function decodeOxleyRevert(errorOrData: unknown, options: { quoteSymbol?: string; generation?: "gen2" | "gen3" | "gen8" } = {}): OxleyRevert | null {
+export function decodeOxleyRevert(errorOrData: unknown, options: { quoteSymbol?: string; generation?: Exclude<DeploymentGeneration, "flat-fee"> } = {}): OxleyRevert | null {
   for (const data of candidates(errorOrData, [])) {
     const decoded = decode(data, { symbol: options.quoteSymbol ?? "USDC", generation: options.generation }, 0);
     if (decoded) return decoded;

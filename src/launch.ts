@@ -11,6 +11,7 @@ export { parseLaunchDeployment } from "./launch-deployment.js";
 export { buildCreatorAccount, buildAuctionLaunch } from "./launch-transactions.js";
 export * from "./launch-abis.js";
 export * from "./gen2-abis.js";
+export * from "./gen9-abis.js";
 export { decodeOxleyRevert, type OxleyRevert, type OxleyRevertName } from "./revert.js";
 
 /** Unsigned, one-step preparation. Confirm each receipt, then call again with the same intent. */

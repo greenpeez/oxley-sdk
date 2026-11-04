@@ -1,17 +1,18 @@
 import { encodeFunctionData, type Address, type Hex } from "viem";
 import { curveAbi } from "./abis.js";
 import { gen8CurveAbi } from "./gen8-abis.js";
-import { deploymentGeneration } from "./validation.js";
+import { isGen8Family } from "./gen8-family.js";
+import { deploymentGeneration, requiresTerms } from "./validation.js";
 import type { Deployment, DeploymentGeneration, Quote, RpcClient } from "./types.js";
 
-/** Curves that check the caller against a terms registry. */
-export const requiresTerms = (generation: DeploymentGeneration) => generation === "gen3" || generation === "gen8";
+/** Curves that check the caller against a terms registry (defined beside the generation list in validation.ts). */
+export { requiresTerms };
 /** Every curve after the flat-fee release stays closed until settlement delivery completes or its timed fallback passes. */
 export const hasTradingGate = (generation: DeploymentGeneration) => generation !== "flat-fee";
 /** Curves whose buys pay the decaying opening surcharge. */
 export const hasOpeningSurcharge = requiresTerms;
 
-/** The curve fields every generation shares. Gen8 has no reserve asset: its reserve is always the registry's quote token. */
+/** The curve fields every generation shares. The Gen8 family has no reserve asset: its reserve is always the registry's quote token. */
 export interface CurveMarket {
   readonly coin: Address; readonly creator: Address; readonly activatedAt: bigint; readonly active: boolean;
   readonly reserveAsset?: Address;
@@ -20,17 +21,17 @@ export interface CurveQuote { readonly amountOut: bigint; readonly collateralOut
 
 export async function readCurveMarket(rpc: RpcClient, deployment: Deployment, id: Hex, blockNumber: bigint): Promise<CurveMarket> {
   const address = deployment.curve.address;
-  if (deploymentGeneration(deployment) === "gen8") {
+  if (isGen8Family(deploymentGeneration(deployment))) {
     return rpc.readContract({ address, abi: gen8CurveAbi, functionName: "market", args: [id], blockNumber });
   }
   return rpc.readContract({ address, abi: curveAbi, functionName: "market", args: [id], blockNumber });
 }
 
-/** Normalizes the three quote shapes: flat-fee/Gen2/Gen3 take the account, Gen8 quotes take none and have no collateral leg. */
+/** Normalizes the three quote shapes: flat-fee/Gen2/Gen3 take the account, Gen8-family quotes take none and have no collateral leg. */
 export async function readCurveQuote(rpc: RpcClient, deployment: Deployment,
   input: { id: Hex; side: "buy" | "sell"; amountIn: bigint; caller: Address; blockNumber: bigint }): Promise<CurveQuote> {
   const { id, side, amountIn, caller, blockNumber } = input, address = deployment.curve.address;
-  if (deploymentGeneration(deployment) === "gen8") {
+  if (isGen8Family(deploymentGeneration(deployment))) {
     const [amountOut, feeAmount] = side === "buy"
       ? await rpc.readContract({ address, abi: gen8CurveAbi, functionName: "quoteBuy", args: [id, amountIn], blockNumber })
       : await rpc.readContract({ address, abi: gen8CurveAbi, functionName: "quoteSell", args: [id, amountIn], blockNumber });
@@ -46,10 +47,10 @@ export async function readCurveQuote(rpc: RpcClient, deployment: Deployment,
   return { amountOut, collateralOut, feeAmount };
 }
 
-/** Calldata of the curve trade. Sells have five arguments on flat-fee/Gen2/Gen3 and four on Gen8. */
+/** Calldata of the curve trade. Sells have five arguments on flat-fee/Gen2/Gen3 and four in the Gen8 family. */
 export function encodeCurveTrade(quote: Pick<Quote, "side" | "amountIn" | "market">, minAmountOut: bigint, deadline: bigint): Hex {
   const { side, amountIn, market } = quote, id = market.id;
-  if (market.generation === "gen8") {
+  if (isGen8Family(market.generation)) {
     return side === "buy"
       ? encodeFunctionData({ abi: gen8CurveAbi, functionName: "buy", args: [id, amountIn, minAmountOut, deadline] })
       : encodeFunctionData({ abi: gen8CurveAbi, functionName: "sell", args: [id, amountIn, minAmountOut, deadline] });

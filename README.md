@@ -10,7 +10,7 @@ accessor, or Uniswap v4 hook. Providers keep their usual funding,
 transaction submission and final-recipient settlement. Fees are enforced by the
 contracts even when the SDK is bypassed.
 
-This repository contains the **Elysium SDK**, version `0.6.0-next.1`, as ESM with
+This repository contains the **Elysium SDK**, version `0.6.0-next.2`, as ESM with
 TypeScript declarations. It is a different API from the legacy `@oxley/sdk`
 `0.4.1` release. The Elysium release is the default `latest` channel. Its
 prerelease version does not imply mainnet readiness. It is not a drop-in upgrade
@@ -29,6 +29,7 @@ preparation, creator-account ABIs, exact launch-fee approvals and resumable stag
 Version `0.6.0-next.0` adds opt-in [Gen2 auction support](#gen2-auctions-exact-duration-breadth-rule-trading-gate).
 Version `0.6.0-next.1` reaches [every current market](#current-markets) (flat-fee, Gen3 and Gen8), adds
 [terms acceptance](#terms), [integrator fees](#integrator-fees) and [Gen8 Dynamic Bids](docs/auctions.md#gen8-dynamic-bids).
+Version `0.6.0-next.2` adds `data.tokens()`: name, symbol, description, socials and image for any number of markets.
 Existing swap, data and bid/claim/refund APIs remain unchanged for the deployed flat-fee release.
 Mainnet bindings remain pending; the included manifest and public feeds are testnet only.
 
@@ -151,7 +152,7 @@ import { createOxleyMarkets } from '@oxley/sdk';
 const markets = createOxleyMarkets({
   publicClient: createPublicClient({ transport: http('https://testnet-rpc.elysium.kinetiq.xyz') }),
 });
-const { market, entry } = await markets.resolveMarket(dealId); // entry.generation: 'flat-fee' | 'gen3' | 'gen8'
+const { market, entry } = await markets.resolveMarket(dealId); // entry.generation: 'flat-fee' | 'gen3' | 'gen8' (| 'gen9' once its manifest is bundled)
 const swap = await markets.prepareSwap({ marketId: dealId, tokenIn: market.quoteToken, tokenOut: market.coin,
   amountIn: 10_000_000n, caller: wallet, slippageBps: 50 });
 ```
@@ -161,6 +162,10 @@ const swap = await markets.prepareSwap({ marketId: dealId, tokenIn: market.quote
 | `flat-fee` | `0x18bf92514c0d749a017aaf69153442703e1a966b` | 8 (`deployments/elysium-testnet.json`) |
 | `gen3` | `0xb7e3e9b2ea74e3051f5c40ce7eb0486b0ab793d3` | 13 (`deployments/elysium-testnet-gen3.json`) |
 | `gen8` | `0x434fd4f556800634399b9f96a4d148de215458e5` | 0 so far; the current launch generation (`deployments/elysium-testnet-gen8.json`) |
+
+`gen9` (the Gen8 contracts redeployed with a launch floor cap) is supported by the SDK and runs beside Gen8. Its reviewed
+manifest `deployments/elysium-testnet-gen9.json` is bundled once that deployment exists; until then pass a Gen9 manifest in
+`createOxleyMarkets({ deployments })`.
 
 Each manifest is verified by runtime code hash and by the curve's own bindings (quote token, terms
 registry). Gen2 is not bundled (every one of its auctions failed, so it holds no market) and the
@@ -204,7 +209,7 @@ Full semantics, rounding and the atomicity caveat: [integrator fees](docs/integr
 ## Indexed Data
 
 `@oxley/sdk/data` is a separate, fetch-only browser/Node client for public indexed
-auctions, bids, activity, trade history, exact volume and chart candles. No wallet
+auctions, bids, activity, trade history, exact volume, chart candles and token details. No wallet
 or RPC client is needed. It requires the deployed public data API, not an RPC URL.
 
 ```ts
@@ -216,6 +221,16 @@ const data = createOxleyDataClient({
 });
 const auctions = await data.auctions({ model: 'cca', limit: 20 });
 if (isCurrentData(auctions)) console.log(auctions.items);
+```
+
+Names, descriptions, social links and images come from `tokens`, which takes any number of deal IDs
+(the client sends 50 per request and merges the answers) and leaves out the ones the API does not list:
+
+```ts
+const dealIds = auctions.items.map(auction => auction.dealId);
+const { items } = await data.tokens({ ids: dealIds });
+for (const token of items) console.log(token.name, token.symbol, token.image?.url ?? 'no image yet');
+const unlisted = dealIds.filter(id => !items.some(token => token.dealId === id));
 ```
 
 See the [public data API guide](docs/data-api.md) for every endpoint, model
@@ -310,7 +325,7 @@ and reconcile it before retrying. A timeout is not proof that nothing was sent.
 | `openingSurchargeWadAt(seconds)`, `buyFeeBps(rate)` | Mirror of the Gen3/Gen8 decaying surcharge schedule |
 | `getDynamicBidLimits`, `prepareDynamicBid`, `prepareDynamicRebid` from `@oxley/sdk/auctions` | Gen8 wallet limits, bids and rebids with witnesses |
 | `buildZeroExBasic(swap,proportionPpm?)` from `@oxley/sdk/0x` | Optional BASIC source action, not a complete user transaction |
-| `decodeOxleyRevert(errorOrData,{generation?})` | Pure decoder for Oxley rule reverts (Gen2, terms, curve trades, Gen8 bids) into `{name,args,message}`, else `null` |
+| `decodeOxleyRevert(errorOrData,{generation?})` | Pure decoder for Oxley rule reverts (Gen2, terms, curve trades, Gen8 bids, Gen9 launch floor cap) into `{name,args,message}`, else `null` |
 
 All amounts use bigint base units, not floating point. Coin precision is 18;
 USDC/Oxy-USDC precision is 6. Use viem `parseUnits`/`formatUnits` at UI boundaries.

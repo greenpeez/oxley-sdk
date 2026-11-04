@@ -37,6 +37,7 @@ curl "$OXLEY_DATA_API_URL/auctions?model=cca&limit=20"
 | `/trades` / `trades` | `dealId`, `from`, `to` | `wallet`, `cursor`, `limit` | Paginated finalized executions |
 | `/candles` / `candles` | `dealId`, `interval`, `from`, `to` | None | One series of genuine OHLCV candles |
 | `/volume` / `volume` | `dealId`, `asOf` | None | Exact 1h, 24h and previous-24h quote volume |
+| `/tokens` / `tokens` | `ids` (up to 50 deal IDs, comma-separated; the SDK accepts any number) | None | Name, symbol, description, social links and image of each market |
 
 `model` must be `cca` or `bonded-v2`. They are distinct approved auction catalogs,
 not alternate names for the same feed. The CCA catalog follows the configured
@@ -93,6 +94,48 @@ and no later than now. An event beyond the indexed head is not yet included.
 `volumeUsdcUnits` in each candle is the indexed quote volume for that bucket.
 For executions, buy `quoteAmount` is gross input and sell `quoteAmount` is net
 output; do not sum them naively to replace the indexed volume series.
+
+## Token Details
+
+`GET /tokens?ids=<dealId>,<dealId>` answers what an app needs to draw a token next to its price: the name and symbol
+the market was launched with, the description and social links its creator saved, and its image. It is a read-only
+display resource for every market the app lists (Gen3, Gen8 and Gen9 alike); no contract read or wallet is needed.
+
+```json
+{ "items": [{
+  "chainId": 99801, "dealId": "0x…", "coin": "0x…", "creator": "0x…", "name": "Nite", "symbol": "NITE",
+  "description": "…", "website": "https://…", "x": "https://x.com/…", "telegram": "https://t.me/…",
+  "image": { "cid": "bafkrei…", "url": "https://app.oxley.fun/api/elysium/token-images?artwork=<cid>&deal=<dealId>" },
+  "metadataRevision": 3, "metadataUpdatedAt": 1793580000 }] }
+```
+
+(The response also carries the usual envelope: `apiVersion`, `resource`, `quoteToken`, `checkedAt`, `freshness`, `sources`.)
+
+- Each `ids` entry is a 66-character lowercase `0x` bytes32 deal ID; more than 50, or a malformed one, is `400 INVALID_QUERY`.
+  The SDK's `data.tokens({ ids })` lowercases and de-duplicates the IDs, sends 50 per request (four at a time) and merges
+  the answers in the order you asked, so you can pass any number. Its `checkedAt` is the oldest batch's.
+- One item per requested ID that the market index knows, in the order asked. **An ID that is not listed is left out:**
+  compare `items` with the IDs you asked for. That covers an unknown ID and a retired (failed) auction, which public reads
+  treat as gone. If every ID you asked for is retired the answer is `410 AUCTION_RETIRED` with `x-robots-tag: noindex`.
+- A listed market whose creator has saved nothing is still an item: `description`, `website`, `x` and `telegram` are `""`,
+  `image` is `null`, and `metadataRevision` and `metadataUpdatedAt` are `0`. Call again later; creators can add them at any time.
+- `name`, `symbol`, `coin` and `creator` come from the market index; the rest are the creator's saved details. They are
+  creator-written text: render them as text (never as markup). Links are `""` or `https://`.
+- `image.url` serves the picture itself and loads from any origin. It is content-addressed (the CID is a hash of the bytes),
+  so a given URL never changes and may be cached for a year. If the app cannot verify a CID itself, `url` is the public
+  IPFS gateway link for it instead.
+- The API is edge-cached: a batch whose markets all have an image for about a minute (a stale copy is reused for up to one
+  more minute while it refreshes), anything incomplete for 5 seconds. Responses are `no-store` for browsers, so batch your
+  IDs, cache the results yourself (images by CID, details by `metadataRevision`) and do not poll per card. There is no
+  per-IP limit today; the platform's capacity limits and DDoS mitigation apply, and `429` carries `Retry-After`.
+- Errors use the usual shapes: `400 INVALID_QUERY`, `410 AUCTION_RETIRED`, `429 API_CAPACITY_EXCEEDED`, and `503`
+  (`DATA_UNAVAILABLE`, `INDEX_STALE`, `INVALID_DATA_RESPONSE`) with `Retry-After`; `503 PUBLIC_DATA_UNAVAILABLE` means the
+  API itself is switched off. A failure is never an empty `200`. Only `GET` and `OPTIONS` are accepted.
+
+```ts
+const { items } = await data.tokens({ ids: auctions.items.map(auction => auction.dealId) });
+const byDeal = new Map(items.map(token => [token.dealId, token]));
+```
 
 ## Freshness And Pagination
 
