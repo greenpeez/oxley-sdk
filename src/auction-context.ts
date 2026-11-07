@@ -10,7 +10,7 @@ import type { AuctionDeployment } from "./auctions.js";
 export function createAuctionContext(rpc: RpcClient, deployment: AuctionDeployment) {
   const { bidRouter, adapter } = deployment.auctionBindings;
   const controller = deployment.auctionController;
-  // `gen8Family` is true for every generation that shares the Gen8 contract stack (Gen8 and Gen9).
+  // `gen8Family` is true for every generation that shares the Gen8 contract stack (Gen8, Gen9 and Gen10).
   const generation = deploymentGeneration(deployment), gen2 = generation === "gen2", gen8Family = isGen8Family(generation);
   async function anchor(): Promise<Anchor> {
     const [chain, block] = await Promise.all([rpc.getChainId(), rpc.getBlock({ blockTag: "latest" })]);

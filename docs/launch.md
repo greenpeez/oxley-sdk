@@ -136,6 +136,41 @@ unchanged.
   (`DURATION_BLOCKS_REQUIRED`). `decodeOxleyRevert` turns `ExactDurationRequired`,
   `InvalidDurationBlocks` and `InvalidRequestedHours` reverts into short messages.
 
+## Gen8 Family Floor Rule
+
+Gen8, Gen9 and Gen10 launches use their own creator account and are **not prepared by this module**: `createOxleyLaunchClient`
+refuses them (`UNSUPPORTED_GENERATION`). What the module does provide for them is the pure floor rule, with no deployment, RPC
+read or wallet, so a form or agent can check a floor before the launch transaction would revert. All floors are in the
+24-decimal `floorPriceWad` units described above.
+
+The Dynamic Bids hook registers an auction only if `floorPriceQ96 x 300,000,000 coins >= ceil(minimumGrossRaise / 10) x 10 x 2^96`
+(`floorPriceQ96` is what `quoteAuctionFloor` returns). The controller's `minimumGrossRaise()` is its net `minimumRaise()` grossed
+up for the 1% platform fee (`net x 10,000 / 9,900`, rounded down), and the net minimum belongs to the generation:
+
+| | Gen8 | Gen9 | Gen10 |
+| --- | --- | --- | --- |
+| Net minimum raise (`minimumRaise()`) | $50,000 | $50,000 | **$30,000** |
+| Gross minimum (`minimumGrossRaise()`) | 50,505,050,505 | 50,505,050,505 | **30,303,030,303** |
+| Lowest floor (`minimumRaiseFloor`) | 168,350,168,257,386,965,981 | 168,350,168,257,386,965,981 | **101,010,101,030,162,826,490** |
+| The same floor as a price | about $0.00016835 | about $0.00016835 | about $0.00010101 |
+| Opening per-wallet ceiling (`ceil(gross / 10)`) | $5,050.505051 | $5,050.505051 | **$3,030.303031** |
+| Floor cap | none | 1e21 | 1e21 |
+
+- `floorReachesMinimumRaise(generation, floorPriceWad)` is the rule above for one generation. A floor whose full sale raises
+  between $30,303 and $50,505 gross reaches Gen10 and is refused on Gen8 and Gen9.
+- `minimumRaiseFloor(generation)` is the exact lowest floor that passes; a forms layer that shows four significant digits rounds it up
+  (Gen10 `$0.0001011`, Gen8 and Gen9 `$0.0001684`) so the number shown can be typed.
+- `validateLaunchFloor(generation, floorPriceWad)` throws `FLOOR_BELOW_MINIMUM_RAISE` for a floor under the generation's lowest and,
+  for Gen9 and Gen10, `FLOOR_ABOVE_MAXIMUM` above 1e21 (the controller's own `FloorPriceAboveMaximum` revert). Messages name USDC only.
+  A floor the adapter itself refuses (under the curve's own minimum, or above the CCA bounds) throws `INVALID_FLOOR` from `quoteAuctionFloor`.
+- The net and gross minimum are `GEN8_FAMILY[generation].minimumNetRaise`, `gen8MinimumNetRaise(generation)` and
+  `gen8MinimumGrossRaise(generation)` in the root export. `verifyDeployment` of an auctions client checks the pinned controller reports the
+  same numbers.
+
+New launches go to the newest generation of the family, which is Gen10; Gen8 and Gen9 stay readable, biddable, tradable and claimable.
+The launch fee and the creator's native operating bond are separate from the raise and are not changed by the generation. The
+raise, floor and bids are USDC (Oxy-USDC on testnet) only.
+
 ## Verification And Boundaries
 
 Every preparation verifies auction runtime pins and bindings plus the creator

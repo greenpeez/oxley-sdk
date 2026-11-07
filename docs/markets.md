@@ -16,16 +16,29 @@ on 2026-10-29 and will grow.
 | --- | --- | --- | --- | --- |
 | `flat-fee` | `elysium-auctions-flat-fee-7006d7889ab293d3` | `0x18bf92514c0d749a017aaf69153442703e1a966b` | 8 | MAYHEM, GNX, EUSEXUA, IRON, RAINBOW, DOBUN, KPROOF, THOR. No terms, no gate. |
 | `gen3` | `elysium-auctions-gen3-aac49c62c3855f41` | `0xb7e3e9b2ea74e3051f5c40ce7eb0486b0ab793d3` | 13 | G3CHECK, CATE, GATE, BG, FIRE, MESSI, YUI, 12, MILADY, OB, MGN, BEAR, VT. Terms, gate, opening surcharge. |
-| `gen8` | `elysium-auctions-gen8-969bd0e317da4145` | `0x434fd4f556800634399b9f96a4d148de215458e5` | 0 | The current launch generation. Quote-only curve. Its first auction (G8TEST) failed, so no market is active yet. |
+| `gen8` | `elysium-auctions-gen8-969bd0e317da4145` | `0x434fd4f556800634399b9f96a4d148de215458e5` | 0 | Quote-only curve. No longer the launch generation. Its first auction (G8TEST) failed, so no market is active yet. |
+| `gen10` | `elysium-auctions-gen10-1fa4ef2a98fd14ed` | `0x68926b5e1b479c1ba32fe8e87699dfe5cfe7bd91` | not recorded | The current launch generation: the Gen9 contracts with a $30,000 net minimum raise. Start block 25237151. |
 
-Manifests: `deployments/elysium-testnet.json`, `elysium-testnet-gen3.json` and
-`elysium-testnet-gen8.json`, each verified by runtime code hash exactly like the original
-flat-fee manifest. They are bundled as `testnetDeployments`, so no file access is needed.
+Manifests: `deployments/elysium-testnet.json`, `elysium-testnet-gen3.json`, `elysium-testnet-gen8.json` and
+`elysium-testnet-gen10.json`, each verified by runtime code hash exactly like the original
+flat-fee manifest. They are bundled as `testnetDeployments` (oldest first, so the current launch generation is last),
+so no file access is needed.
 
 `gen9` is the Gen8 contract stack redeployed with a cap on the launch floor price. It trades exactly like
 Gen8 (same views, calldata, terms and gate) and runs beside it. Its manifest
-`deployments/elysium-testnet-gen9.json` is added to the bundle once the reviewed live deployment exists;
-until then `gen9TestnetDeployment` is `undefined` and a Gen9 manifest can be passed in `deployments`.
+`deployments/elysium-testnet-gen9.json` is not in the bundle: `gen9TestnetDeployment` is `undefined`, and a Gen9
+manifest can be passed in `deployments` (for example `[...testnetDeployments, gen9Manifest]`) to trade its markets.
+Gen9 no longer takes new launches; its existing markets keep trading, bidding and claiming.
+
+`gen10` is the Gen9 stack redeployed with one change: the launch controller's net minimum raise is **$30,000**
+(`minimumRaise()` is 30,000,000,000 and `minimumGrossRaise()` 30,303,030,303 in USDC base units) instead of $50,000
+(50,505,050,505 gross) on Gen8 and Gen9. It is a constructor-only literal, so the runtime ABI, bid rules, curve views,
+calldata, floor cap and error codes are Gen9's. It trades exactly like Gen8 and Gen9 and reuses **Gen9's terms
+registry** (`0x94c8c7203e2a01e37f104fa6cbe00382642c084d`): a wallet that accepted the terms for a Gen9 market is already
+accepted on Gen10. Because the registry pin is common to the two releases, the Gen9 and Gen10 manifests share that one
+address; every other contract differs. Deal IDs are still resolved on chain, so a market lives on exactly one curve.
+The current launch generation follows the application: it launches on the newest generation of this family, so a new
+auction is created on Gen10 while Gen8 and Gen9 markets are only traded, bid on and claimed.
 
 Not supported, and why:
 
@@ -48,7 +61,7 @@ const markets = createOxleyMarkets({
 });
 await markets.verifyDeployments(); // pins, bindings, terms registry, decimals for every generation
 
-const { market, entry } = await markets.resolveMarket(dealId); // entry.generation: 'flat-fee' | 'gen3' | 'gen8' (| 'gen9' once its manifest is bundled)
+const { market, entry } = await markets.resolveMarket(dealId); // entry.generation: 'flat-fee' | 'gen3' | 'gen8' | 'gen10' (| 'gen9' once its manifest is bundled)
 const swap = await markets.prepareSwap({ marketId: dealId, tokenIn: market.quoteToken, tokenOut: market.coin,
   amountIn: 10_000_000n, caller: wallet, slippageBps: 50 });
 const funding = await markets.checkSwap(swap); // routed by swap.quote.releaseId
@@ -83,7 +96,7 @@ events from its start block, at most 10,000 blocks per page per generation, and 
 
 ## What Differs By Generation
 
-| | flat-fee | Gen3 | Gen8 (and Gen9) |
+| | flat-fee | Gen3 | Gen8 (and Gen9, Gen10) |
 | --- | --- | --- | --- |
 | `quoteBuy` / `quoteSell` | `(id, amount, account)`; sell returns a collateral leg | same | `(id, amount)`; no account, no collateral leg |
 | `sell` arguments | `id, coinIn, minQuote, minCollateral, deadline` | same | `id, coinIn, minQuote, deadline` |
@@ -93,7 +106,7 @@ events from its start block, at most 10,000 blocks per page per generation, and 
 | Opening surcharge on buys | no | yes | yes |
 
 The SDK selects views and calldata from the market's generation (`market.generation`), and
-`buildSwap` encodes by the quote's market, so a Gen8 or Gen9 quote can never produce a five-argument
+`buildSwap` encodes by the quote's market, so a Gen8, Gen9 or Gen10 quote can never produce a five-argument
 sell. Quotes come from the curve's own views; the SDK never re-implements pricing. A Gen3
 sell quote with a collateral leg is refused (`COLLATERAL_OUTPUT`), as before.
 

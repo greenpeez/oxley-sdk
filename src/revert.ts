@@ -33,7 +33,7 @@ function candidates(value: unknown, out: Hex[], depth = 0): Hex[] {
   }
   return out;
 }
-/** The released rule errors plus the Gen9 launch controller's floor cap error, which has no compiled ABI in this package. */
+/** The released rule errors plus the Gen9 and Gen10 launch controllers' floor cap error, which has no compiled ABI in this package. */
 const revertAbi = [...oxleyRevertAbi, ...launchFloorCapAbi] as const;
 function decodeResult(data: Hex) {
   try { return decodeErrorResult({ abi: revertAbi, data }); } catch { return null; }
@@ -86,8 +86,8 @@ function decode(data: Hex, context: RevertContext, depth: number): OxleyRevert |
 }
 /**
  * Pure decoder for Oxley rule reverts (Gen2 auctions and gate, Gen3 and Gen8-family terms and curve trades, Dynamic Bids, and the
- * Gen9 launch floor cap). Accepts raw revert data or a viem/EIP-1193 error object and returns null for anything else (including
- * unrelated custom errors). Never performs RPC calls. Pass `generation: "gen8"` or `"gen9"` so a shared error such as
+ * Gen9 and Gen10 launch floor cap). Accepts raw revert data or a viem/EIP-1193 error object and returns null for anything else (including
+ * unrelated custom errors). Never performs RPC calls. Pass `generation: "gen8"`, `"gen9"` or `"gen10"` so a shared error such as
  * `WalletCapExceeded` is worded for that generation.
  */
 export function decodeOxleyRevert(errorOrData: unknown, options: { quoteSymbol?: string; generation?: Exclude<DeploymentGeneration, "flat-fee"> } = {}): OxleyRevert | null {

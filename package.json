@@ -1,7 +1,7 @@
 {
   "name": "@oxley/sdk",
-  "version": "0.6.0-next.2",
-  "description": "Oxley market data, quotes, swaps (with optional integrator fees), terms and unsigned auction launch, bid, claim and refund transactions across the flat-fee, Gen3 and Gen8 generations",
+  "version": "0.6.0-next.3",
+  "description": "Oxley market data, quotes, swaps (with optional integrator fees), terms and unsigned auction launch, bid, claim and refund transactions across the flat-fee, Gen3 and Gen8 generations and the Gen8 redeployments Gen9 and Gen10",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -68,6 +68,7 @@
     "./deployments/elysium-testnet-gen3.json": "./deployments/elysium-testnet-gen3.json",
     "./deployments/elysium-testnet-gen8.json": "./deployments/elysium-testnet-gen8.json",
     "./deployments/elysium-testnet-gen9.json": "./deployments/elysium-testnet-gen9.json",
+    "./deployments/elysium-testnet-gen10.json": "./deployments/elysium-testnet-gen10.json",
     "./deployments/mainnet.template.json": "./deployments/mainnet.template.json"
   },
   "files": [

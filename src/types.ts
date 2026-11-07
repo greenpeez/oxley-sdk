@@ -5,8 +5,9 @@ export type RpcClient = Pick<PublicClient, "getChainId" | "getBlock" | "getCode"
 export interface ContractPin { readonly address: Address; readonly runtimeCodeHash: Hex }
 /**
  * Contract generation of a release. An absent manifest field means the deployed flat-fee release. Gen3 and the Gen8 family
- * (Gen8, Gen9) also require the caller to have accepted the terms in the bound terms registry; the Gen8 family is the quote-only
- * curve with Dynamic Bids. Gen9 is the Gen8 stack redeployed with a launch floor cap and keeps its own identity.
+ * (Gen8, Gen9, Gen10) also require the caller to have accepted the terms in the bound terms registry; the Gen8 family is the
+ * quote-only curve with Dynamic Bids. Gen9 is the Gen8 stack redeployed with a launch floor cap; Gen10 is the Gen9 stack with a
+ * $30,000 net minimum raise (Gen8 and Gen9: $50,000). Each keeps its own identity.
  */
 export type DeploymentGeneration = "flat-fee" | "gen2" | "gen3" | Gen8FamilyId;
 export interface Deployment {
@@ -19,7 +20,7 @@ export interface Deployment {
   readonly registry: ContractPin;
   readonly quoteToken: ContractPin & { readonly symbol: "USDC" | "Oxy-USDC"; readonly decimals: 6 };
   readonly auctionController: Address;
-  /** Absent: flat-fee. "gen2": exact-duration launches, breadth bid rule and trading gate. "gen3" and the Gen8 family ("gen8", "gen9"): terms-gated curves. */
+  /** Absent: flat-fee. "gen2": exact-duration launches, breadth bid rule and trading gate. "gen3" and the Gen8 family ("gen8", "gen9", "gen10"): terms-gated curves. */
   readonly generation?: DeploymentGeneration;
   /** Required exactly for "gen3" and the Gen8 family: the end-user terms registry the curve (and the Gen8-family bid hook) enforces. */
   readonly termsRegistry?: ContractPin;

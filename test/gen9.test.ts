@@ -49,7 +49,7 @@ test("a Gen9 auction deployment takes the Gen8 rules: all pins, the exact bid ru
   assert.throws(() => parseAuctionDeployment({ ...gen9, termsRegistry: undefined }), code("INVALID_DEPLOYMENT"));
   assert.throws(() => parseAuctionDeployment({ ...gen9, auctionBindings: { ...gen9.auctionBindings, bidHook: gen9.auctionBindings.adapter } }), code("INVALID_DEPLOYMENT"));
   assert.throws(() => parseAuctionDeployment({ ...manifest("flat-fee", 0), auctionBindings: { ...manifest("flat-fee", 0).auctionBindings, bidHook: gen9.curve } }), code("INVALID_DEPLOYMENT"));
-  assert.throws(() => parseLaunchDeployment({ ...gen9, launchBindings: {} }), (error: unknown) => code("UNSUPPORTED_GENERATION")(error) && /Gen8 or Gen9 launches/.test((error as Error).message));
+  assert.throws(() => parseLaunchDeployment({ ...gen9, launchBindings: {} }), (error: unknown) => code("UNSUPPORTED_GENERATION")(error) && /Gen8, Gen9, or Gen10 launches/.test((error as Error).message));
 });
 
 const request = { dealId, caller: owner, entered: 100_000_000n, maxPriceQ96: 2000n, deadline: 5000n };
@@ -75,7 +75,7 @@ test("Dynamic Bids on the Gen9 fixture give the Gen8 limits and calldata; only t
   assert.deepEqual([approval.to, spender.toLowerCase(), amount], [gen9.roles.quote, gen9.roles.router, bid9.debit]);
   assert.equal(gen9.roles.quote, gen8File().quoteToken.address, "the bid is paid in the Oxy-USDC that Gen8 also uses");
   // The generic bid path refuses every family member, naming both.
-  await assert.rejects(gen9.client().prepareBid({ ...request, previousTick: 1n }), (error: unknown) => code("DYNAMIC_BID_REQUIRED")(error) && /Gen8 or Gen9/.test((error as Error).message));
+  await assert.rejects(gen9.client().prepareBid({ ...request, previousTick: 1n }), (error: unknown) => code("DYNAMIC_BID_REQUIRED")(error) && /Gen8, Gen9, or Gen10/.test((error as Error).message));
 });
 test("a Gen9 rebid exits one outbid bid with its own witness, exactly like Gen8", async () => {
   const { gen8, gen9 } = worlds();
@@ -99,10 +99,10 @@ test("a Gen9 wallet's refusals match Gen8's, and the Dynamic Bid paths stay clos
   const expected = ["BID_TOO_LOW", "INVALID_BID_PRICE", "WALLET_CAP_EXCEEDED", "TERMS_NOT_ACCEPTED", "CREATOR_BID_NOT_ALLOWED"];
   assert.deepEqual(await refusals(worlds().gen9), expected); assert.deepEqual(await refusals(worlds().gen8), expected);
   const flat = createOxleyAuctionClient({ publicClient: worlds().gen9.rpc, deployment: manifest("flat-fee", 0) });
-  await assert.rejects(flat.getDynamicBidLimits({ dealId, owner }), (error: unknown) => code("GEN8_REQUIRED")(error) && /Gen8 or Gen9 deployments/.test((error as Error).message));
+  await assert.rejects(flat.getDynamicBidLimits({ dealId, owner }), (error: unknown) => code("GEN8_REQUIRED")(error) && /Gen8, Gen9, or Gen10 deployments/.test((error as Error).message));
   await assert.rejects(flat.prepareDynamicBid(request), code("GEN8_REQUIRED"));
 });
-test("verifying a Gen9 deployment reads the controller's floor cap; verifying Gen8 reads nothing new", async () => {
+test("verifying a Gen9 deployment reads the controller's floor cap; verifying Gen8 reads no floor cap", async () => {
   const { gen8, gen9 } = worlds();
   assert.equal((await gen9.client().verifyDeployment()).blockNumber, 100n);
   const capReads = gen9.world.reads.filter(call => call.functionName === "MAX_FLOOR_PRICE_WAD");

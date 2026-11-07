@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 3,
+  "generation": "gen10",
+  "mode": "production",
+  "activated": true,
+  "chainId": 99801,
+  "releaseId": "elysium-auctions-gen10-1fa4ef2a98fd14ed",
+  "planSha256": "1fa4ef2a98fd14ed54ef40501376fb354e8e4495abf8851dd8a2207b2b712023",
+  "compiledGraphSha256": "2b7ad321d9942b163d839b70265d5fcd4bb88396ca7d583584c39e7da9ec18a8",
+  "startBlock": "25237151",
+  "blockHash": "0x158538b821ba7b3369ad995f027b5d0dbbe13391d6d62aa2ab8016ff381dc8f2",
+  "roles": {
+    "quoteToken": {
+      "address": "0xa4ce6e6c719f7fb524230c367948039b078683e4",
+      "runtimeCodeHash": "0x39aacdb7a8321713594376632f885dac463b2a445d211cf182ea0edc4a3e146f"
+    },
+    "permit2": {
+      "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+      "runtimeCodeHash": "0x2cb311778aae1e57e25c84b36770ee4008be8c7f79c0d3fb4f2aa30be2626600"
+    },
+    "ccaFactory": {
+      "address": "0xa861e4886ff2e71f8b8aed09ff68f8eeafb58e17",
+      "runtimeCodeHash": "0xa1d2a90564f4f63580b25de42efaff92505c254b00fc666f65ab38126cce5cfa"
+    },
+    "termsRegistry": {
+      "address": "0x94c8c7203e2a01e37f104fa6cbe00382642c084d",
+      "runtimeCodeHash": "0x2aebc67f8fb67759321d1367cf8306bac96b66527b719f2598976994a87f052d"
+    },
+    "feeRouter": {
+      "address": "0xedc210affb86c6b64b3ba07cb9dd3180dc177fb2",
+      "runtimeCodeHash": "0xade9af3b074595b894f258341baf9650ed928d1ff0351339a05d928e5c6ee9b2"
+    },
+    "launchEscrow": {
+      "address": "0x950c5b0b9748eed712ece2273dbc4237d72ef09e",
+      "runtimeCodeHash": "0xec2da9dcdf073a437a548b143809d9b7183778f8ce6ebc1cecd28f71e9fdd0e4"
+    },
+    "coordinator": {
+      "address": "0x851cd28db3bd2cfe3bdbadf45d1c02701647ac17",
+      "runtimeCodeHash": "0xec75cabe65aaabdf0acde5c882fc2f66fcd98e944f0c89a35501febac1e6615c"
+    },
+    "listingVault": {
+      "address": "0x4521009187e1523a9e73c1186818ddb319b2edaa",
+      "runtimeCodeHash": "0x30ea33015bec66220c57a38265bebc1cd1a5b28788a08dbe46ac4be9f57f1a96"
+    },
+    "entryController": {
+      "address": "0x52f5728513ce57184713b109e0119f5b6455f47b",
+      "runtimeCodeHash": "0x3aade113b66884cd6290b0f648c2b00bb211444e178a9279d712ecb9d8b1831d"
+    },
+    "coinFactory": {
+      "address": "0xc3a2ce5708addfc9ba0e182ac1075f16df790e4b",
+      "runtimeCodeHash": "0x1a838160c2610cf38fef0d93265ab900a718b2fe9a1cf2ce815b5357a45ff780"
+    },
+    "registry": {
+      "address": "0x1e59df61e52f494492cf38ca6ae49a2eba259e13",
+      "runtimeCodeHash": "0xb71ef4ea1deb4b44c28ee010a882c86a86ed5c72f21ebd43562d8f9889046df9"
+    },
+    "bidRouter": {
+      "address": "0x74f01484ff135fe25dc1c942eb31da8d43e43d76",
+      "runtimeCodeHash": "0x0a5079f82b389465ecc61fb939bfdd527f36babdaf16a1b68d1edbc4dd689d46"
+    },
+    "bidHook": {
+      "address": "0x86f87064955204e52AD3925C9412B3a5cd07e061",
+      "runtimeCodeHash": "0x07d4e1f2cd5cb0aaa52f71337d34a5ed21d4a09d33f5d707d2a28c691ccc4a2e"
+    },
+    "exposureHelper": {
+      "address": "0xDDFC022e77664c806963040810904A1aA5E2CA46",
+      "runtimeCodeHash": "0x25c44ad1d696a4875c964b2def4ff550bd46936f97eff22d102ca69d9a6db32f"
+    },
+    "adapter": {
+      "address": "0xedf70a600a700b6c6fa7a4defa96f23462b69565",
+      "runtimeCodeHash": "0x458852df5cb40bc80c4475df9fd2c16aa80e80e5d1fa2712ccd20037d96e00e9"
+    },
+    "batcherFactory": {
+      "address": "0x9c13293bf83e837c525f3158706c304f1fcb95a0",
+      "runtimeCodeHash": "0x60d1e5d3116fa8b21e4891f98877cdfac9c84215a9c6df697663945ada942226"
+    },
+    "deliveryCapacity": {
+      "address": "0x04abe538fb0d7699dd5a77380901f0b889bb91e8",
+      "runtimeCodeHash": "0x9aedd0cc58eaa09e4b61a0c1d355314420fc2c439909ddbb8018d37fe6686919"
+    },
+    "controller": {
+      "address": "0xff729e724c54045d04846cde960c3c5ad5e892fd",
+      "runtimeCodeHash": "0x04e0f97a10560dae217ee3ea3a2a466154fe1b4decb359ad68a66a49c583383a"
+    },
+    "bondEscrow": {
+      "address": "0x70032f2faee1a6d25cf191b513f0dc9adf8928cb",
+      "runtimeCodeHash": "0x360f7cc1ecd3c26207e8bad87383c52ed01610cffca9c636db4f2f5b22fabca4"
+    },
+    "creatorAccountFactory": {
+      "address": "0x343ce625f9930648ccebe503bd274606b376d98c",
+      "runtimeCodeHash": "0x0a8d99284f40b370a1e317ef6dcbff0cec1278da045cce97af2d14f997097d6c"
+    },
+    "curve": {
+      "address": "0x68926b5e1b479c1ba32fe8e87699dfe5cfe7bd91",
+      "runtimeCodeHash": "0x62df8124e054fdb33f2450a7e01981a41d965b2ce12ef64250bd0c9c84c060db"
+    },
+    "proTradeRouter": {
+      "address": "0x1cb0aad8606899c57ef6746d2b2366bd41772970",
+      "runtimeCodeHash": "0xd5fa2fc1187cc22f681e2cec43de78f9d0aed70414ded85b8874b6f36cde1ddc"
+    },
+    "orderExecutor": {
+      "address": "0xfbd1d3e8b8e07ca3508b75f8f773229df1efeca8",
+      "runtimeCodeHash": "0x329f08bd88ccd7f1c7856db3d0f9b74ef40afa0fab7f7273e78cf8b48d3e483c"
+    },
+    "beaconVerifier": {
+      "address": "0x6eC9868f4502795656AeEb8D9BE9677caf006f54",
+      "runtimeCodeHash": "0xd09c97166df01662158ca3fd8dfbc5caba38c623ed8e5869cd17a29eb78fe15e"
+    },
+    "rewardOracle": {
+      "address": "0xb704BC48ed8d8413Cf7123CaBbD210f0561B2370",
+      "runtimeCodeHash": "0xa7766c6b22a59b8c5216ac5cbb8cca2993dea18ed7b6d187ea230561fadb3500"
+    }
+  },
+  "quote": {
+    "symbol": "Oxy-USDC",
+    "decimals": 6,
+    "localMock": false
+  },
+  "bidRules": {
+    "version": "8",
+    "minBid": "20000000",
+    "tokenCap": "30000000000000000000000000",
+    "liveBids": 3,
+    "walletBids": 12,
+    "hookMaxBids": 0,
+    "capacityMaxBids": 0,
+    "maxPriceLevels": 1000
+  },
+  "policies": {
+    "ticker": "ascii-alnum-1-10-reserved-oxy-v1",
+    "openingClock": "first-successful-sync-or-trade-v1",
+    "openingSchedule": "18pct-linear-halving-10s-until-60s-v1",
+    "rewards": "fixed-beacon-permissionless-guarded-twap300-v1",
+    "security": "scoped-publication-pull-handover-isolated-refunds-creator-namespace-v1",
+    "reserve": "absent",
+    "staking": "absent",
+    "bids": "per-wallet-dynamic-v8"
+  }
+}

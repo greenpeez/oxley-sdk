@@ -17,12 +17,18 @@ export function rolesOf(deployment: AuctionManifest): Roles {
 export interface Checkpoint { clearingPrice: bigint; prev: bigint; next: bigint }
 export interface StoredBid { id: bigint; owner: Address; maxPrice: bigint; startBlock: bigint; amountQ96: bigint; exitedBlock: bigint }
 
-function newWorld(roles: Roles, floorCap: bigint | undefined) {
+/** Written out here, not taken from the SDK: the controller grosses its net minimum raise up for the 1% platform fee, rounding down. */
+const grossOf = (net: bigint) => net * 10_000n / 9_900n;
+/** The net minimum raise of Gen8 and Gen9 ($50,000); Gen10's is $30,000. */
+export const NET_RAISE_50K = 50_000_000_000n, NET_RAISE_30K = 30_000_000_000n;
+
+function newWorld(roles: Roles, floorCap: bigint | undefined, minimumRaise: bigint) {
+  const gross = grossOf(minimumRaise), ceiling = (gross + 9n) / 10n;
   return {
-    roles, floorCap,
+    roles, floorCap, minimumRaise,
     block: 150n, start: 100n, end: 10_000n, floor: 1000n, tick: 100n, maxPrice: 1_000_000n, open: true, minimumRaiseMet: false,
     balance: 1_000_000_000n, allowance: 0n, termsAccepted: true, creatorExcluded: false,
-    minimum: 50_505_050_505n, preview: { committed: 0n, ceiling: 5_050_505_051n, allowance: 5_050_505_051n },
+    minimum: gross, preview: { committed: 0n, ceiling, allowance: ceiling },
     ids: [] as bigint[], bids: new Map<bigint, StoredBid>(), checkpoints: new Map<bigint, Checkpoint>([[10n, { clearingPrice: 100n, prev: 0n, next: 20n }],
       [20n, { clearingPrice: 150n, prev: 10n, next: 30n }], [30n, { clearingPrice: 200n, prev: 20n, next: 0n }]]),
     last: 30n, logs: [] as { args: { blockNumber: bigint; clearingPriceQ96: bigint; cumulativeMps: number } }[],
@@ -59,10 +65,14 @@ const adapter = (w: State, call: ReadCall) => pick("adapter", {
   controller: () => w.roles.controller, quoteAsset: () => w.roles.quote, validationHook: () => w.roles.hook, auctionFor: () => auction,
   currentBlock: () => w.block, MAX_CCA_BID_PRICE_Q96: () => w.maxPrice,
 }, call.functionName);
-/** `MAX_FLOOR_PRICE_WAD` is answered only when the world models a capped controller (Gen9); a Gen8 world must never be asked for it. */
+/**
+ * `MAX_FLOOR_PRICE_WAD` is answered only when the world models a capped controller (Gen9, Gen10); a Gen8 world must never be asked for it. Every family controller
+ * answers its constructor's net minimum raise and the gross figure derived from it.
+ */
 const controller = (w: State, call: ReadCall) => pick("controller", {
   feeBidRouter: () => w.roles.router, ccaAdapter: () => w.roles.adapter, quoteAsset: () => w.roles.quote, registry: () => w.roles.registry,
   termsRegistry: () => w.roles.terms, campaign: () => [creator, coin, dealId, w.end, w.open],
+  minimumRaise: () => w.minimumRaise, minimumGrossRaise: () => grossOf(w.minimumRaise),
   ...w.floorCap === undefined ? {} : { MAX_FLOOR_PRICE_WAD: () => w.floorCap },
 }, call.functionName);
 function readAuctionWorld(w: State, call: ReadCall): unknown {
@@ -85,10 +95,11 @@ function callResultOf(w: State, { to, data }: { to: Address; data: Hex }): Hex |
 }
 /**
  * A Gen8-family auction, its router, hook, adapter and the wallet's state, as plain fields a test can change. The default is the
- * synthetic Gen8 graph. Pass another manifest (Gen9) and its own `floorCap` to model that deployment; the world answers at its addresses.
+ * synthetic Gen8 graph ($50,000 net minimum raise). Pass another manifest (Gen9, Gen10), its own `floorCap` and its controller's
+ * `minimumRaise` to model that deployment; the world answers at its addresses.
  */
-export function createAuctionWorld(deployment: AuctionManifest = manifest("gen8", 20), floorCap?: bigint) {
-  const roles = rolesOf(deployment), w = newWorld(roles, floorCap);
+export function createAuctionWorld(deployment: AuctionManifest = manifest("gen8", 20), floorCap?: bigint, minimumRaise = NET_RAISE_50K) {
+  const roles = rolesOf(deployment), w = newWorld(roles, floorCap, minimumRaise);
   const chain = mockRpc(call => readAuctionWorld(w, call), { callResult: call => callResultOf(w, call), logs: () => w.logs });
   const client = () => createOxleyAuctionClient({ publicClient: chain.rpc, deployment });
   return { ...chain, world: w, deployment, roles, client };

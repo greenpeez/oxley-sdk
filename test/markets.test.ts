@@ -79,7 +79,7 @@ test("collateral-returning sells stay rejected on Gen3 and buys paused on Gen8 r
 });
 test("swap calldata matches the full compiled ABI of each curve (Gen8 sell has four arguments)", async () => {
   const { sdk, addMarket, request } = setup();
-  const abis: Record<Generation, string> = { "flat-fee": "ElysiumReserveCurveVNext", gen3: "ElysiumReserveCurveGen3", gen8: "ElysiumCurveGen8", gen9: "ElysiumCurveGen8" };
+  const abis: Record<Generation, string> = { "flat-fee": "ElysiumReserveCurveVNext", gen3: "ElysiumReserveCurveGen3", gen8: "ElysiumCurveGen8", gen9: "ElysiumCurveGen8", gen10: "ElysiumCurveGen8" };
   for (const generation of GENERATIONS) {
     const market = addMarket(generation, GENERATIONS.indexOf(generation) + 1), abi = full(abis[generation]);
     const buy = await sdk.prepareSwap({ ...request(market.id, market.coin, "buy"), slippageBps: 100 });

@@ -62,9 +62,9 @@ It is not an alternative bid/trade payment asset or an SDK sponsorship budget.
 
 ## Newer Generations
 
-A mainnet release on a newer curve additionally needs `generation` (`"gen3"`, `"gen8"` or `"gen9"`) and a
+A mainnet release on a newer curve additionally needs `generation` (`"gen3"`, `"gen8"`, `"gen9"` or `"gen10"`) and a
 `termsRegistry` pin (address and runtime hash) in the manifest; `parseDeployment` requires the pin
-for exactly those generations and checks the curve is bound to it. A Gen8 or Gen9 auction manifest also
+for exactly those generations and checks the curve is bound to it. A Gen8, Gen9 or Gen10 auction manifest also
 needs `auctionBindings.bidHook` and `exposureHelper` pins and the exact `bidRules` record (see
 `deployments/elysium-testnet-gen8.json`). `createOxleyMarkets({ deployments })` accepts the reviewed
 mainnet manifests in place of the bundled testnet set; it never mixes chains.

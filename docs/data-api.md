@@ -99,7 +99,7 @@ output; do not sum them naively to replace the indexed volume series.
 
 `GET /tokens?ids=<dealId>,<dealId>` answers what an app needs to draw a token next to its price: the name and symbol
 the market was launched with, the description and social links its creator saved, and its image. It is a read-only
-display resource for every market the app lists (Gen3, Gen8 and Gen9 alike); no contract read or wallet is needed.
+display resource for every market the app lists (Gen3, Gen8, Gen9 and Gen10 alike); no contract read or wallet is needed.
 
 ```json
 { "items": [{

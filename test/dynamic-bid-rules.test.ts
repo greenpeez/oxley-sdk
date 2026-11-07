@@ -4,7 +4,7 @@ import { decodeFunctionData, maxUint128, type Hex } from "viem";
 import { acceptedBidFee, affordableBid, alignBidPrice, bidDebit, bidRefusal, bidsRemaining, buildDynamicBid, buildDynamicRebid, decodeBidWitnesses,
   encodeBidWitnesses, liveBids, maximumNewBid, normalizeCheckpoints, walletAllowance, walletCeiling, witnessFor, GEN8_TOKEN_CAP, GEN8_MIN_BID,
   type Gen8Position, type Gen8WalletLimits } from "../src/auctions.js";
-import { OxleyError } from "../src/index.js";
+import { gen8MinimumGrossRaise, OxleyError } from "../src/index.js";
 import { addr, full, id32 } from "./support/chain.js";
 
 const code = (expected: string) => (error: unknown) => error instanceof OxleyError && error.code === expected;
@@ -29,6 +29,12 @@ test("a wallet's ceiling and allowance follow the hook's formulas", () => {
   assert.equal(walletCeiling(50_505_050_505n, 45_454_545_459n), 5_050_505_051n);
   assert.equal(walletCeiling(50_505_050_505n, 100_000_000_000n), 11_111_111_111n);
   assert.equal(walletCeiling(10n, 0n), 1n);
+  // Gen10's minimum gross raise is 30,303.030303 USDC ($30,000 net): the opening ceiling is $3,030.303031 until others commit more than nine times it.
+  assert.equal(gen8MinimumGrossRaise("gen10"), 30_303_030_303n); assert.equal(gen8MinimumGrossRaise("gen9"), 50_505_050_505n);
+  assert.equal(walletCeiling(gen8MinimumGrossRaise("gen10"), 0n), 3_030_303_031n);
+  assert.equal(walletCeiling(gen8MinimumGrossRaise("gen10"), 27_272_727_272n), 3_030_303_031n);
+  assert.equal(walletCeiling(gen8MinimumGrossRaise("gen10"), 27_272_727_288n), 3_030_303_032n);
+  assert.equal(walletCeiling(gen8MinimumGrossRaise("gen10"), 100_000_000_000n), 11_111_111_111n);
   const Q96 = 1n << 96n;
   assert.equal(walletAllowance({ ceiling: 1000n, committed: 400n, tokensHeld: 0n, clearingPriceQ96: Q96 }), 600n);
   assert.equal(walletAllowance({ ceiling: 1000n, committed: 1000n, tokensHeld: 0n, clearingPriceQ96: Q96 }), 0n);

@@ -6,10 +6,11 @@ import process from "node:process";
 import console from "node:console";
 import { manifestFor, mapProductionManifest } from "./deployment-manifests.mjs";
 
-// Rebuilds the Gen3 and Gen8 testnet manifests, their full ABIs and docs/live-artifacts.json from the reviewed deployment records.
+// Rebuilds the Gen3, Gen8 and Gen10 testnet manifests, their full ABIs and docs/live-artifacts.json from the reviewed deployment records.
 // Usage: node scripts/import-live-manifests.mjs <deployment-records-root> <application-worktree> [--gen9-record=<path under the records root> --gen9-sha256=<hex>]
 // Gen9 (the Gen8 stack plus a launch floor cap) is imported only when its reviewed record is named together with that record's sha256; without
-// both flags deployments/elysium-testnet-gen9.json is neither written nor touched.
+// both flags deployments/elysium-testnet-gen9.json is neither written nor touched. Gen10 (the Gen9 stack with a $30,000 net minimum raise) is
+// pinned below like Gen8: its record is read from the records root and must match its sha256.
 const flags = process.argv.slice(2).filter(arg => arg.startsWith("--")), [records, app] = process.argv.slice(2).filter(arg => !arg.startsWith("--"));
 const flag = name => flags.find(arg => arg.startsWith(`--${name}=`))?.slice(name.length + 3);
 assert.ok(records && app, "Supply the deployment records directory and the application worktree");
@@ -27,17 +28,23 @@ const gen3 = { schemaVersion: g3.schemaVersion, releaseId: g3.releaseId, generat
   termsRegistry: g3.gen3.termsRegistry, launchBindings: g3.launchBindings, auctionBindings: g3.auctionBindings, gen3: g3.gen3 };
 writeFileSync("deployments/elysium-testnet-gen3.json", JSON.stringify(gen3, null, 2) + "\n");
 
-// Gen8 and Gen9 share one mapping: the production schema-3 manifest to the SDK's deployment shape (only the roles the SDK reads are pinned).
+// Gen8, Gen9 and Gen10 share one mapping: the production schema-3 manifest to the SDK's deployment shape (only the roles the SDK reads are pinned).
+// Gen10's record is the owner's live deployment record of 2026-11-06 (release elysium-auctions-gen10-1fa4ef2a98fd14ed).
 const familyRecords = [{ generation: "gen8", path: "gen8-live-20261029/gen8-deployment.json", sha: "e1d46ed2c5f257483c2a4822e1c0cc1968f61861be81145484c20625752398b9" }];
 if (gen9Record) familyRecords.push({ generation: "gen9", path: gen9Record, sha: gen9Sha });
 else console.log("gen9: skipped (no --gen9-record); deployments/elysium-testnet-gen9.json is not written");
-const imported = familyRecords.map(({ generation, path, sha: expected }) => {
+familyRecords.push({ generation: "gen10", path: "gen10-live-20261106/gen10-deployment.json", sha: "dfbbba541ecc9049b371fa6fafb0f4bb29c6ccc6ae081cadad2de4fe408d9e8f", checkedAt: "2026-11-07" });
+const imported = familyRecords.map(({ generation, path, sha: expected, checkedAt }) => {
   const entry = manifestFor(generation), manifest = mapProductionManifest(entry, lower(JSON.parse(source(records, path, expected))));
   writeFileSync(entry.file, JSON.stringify(manifest, null, 2) + "\n");
-  return { generation, path, sha: expected, manifest };
+  return { generation, path, sha: expected, checkedAt, manifest };
 });
-// Gen9 reuses Oxy-USDC: the same pin as Gen8's, or the record is not the Gen8 stack redeployed.
+// Gen9 and Gen10 reuse Oxy-USDC: the same pin as Gen8's, or the record is not the Gen8 stack redeployed.
 for (const { manifest } of imported.slice(1)) assert.deepEqual(manifest.quoteToken, imported[0].manifest.quoteToken, "the Oxy-USDC pin must equal Gen8's");
+// Gen10 reuses Gen9's terms registry (owner decision 2026-11-06), so no wallet accepts the terms again: the pin below is Gen9's live registry
+// (gen9-live-20261101/gen9-deployment.json roles.termsRegistry), and an imported Gen9 record must agree with it.
+const GEN9_TERMS_REGISTRY = { address: "0x94c8c7203e2a01e37f104fa6cbe00382642c084d", runtimeCodeHash: "0x2aebc67f8fb67759321d1367cf8306bac96b66527b719f2598976994a87f052d" };
+for (const { generation, manifest } of imported.slice(1)) assert.deepEqual(manifest.termsRegistry, GEN9_TERMS_REGISTRY, `${generation} must name Gen9's terms registry`);
 
 const forge = name => `.tooling/verification/gen8-ast/out/${name}.sol/${name}.json`;
 const abis = [
@@ -64,7 +71,8 @@ writeFileSync("docs/live-artifacts.json", JSON.stringify({
     note: "The Gen8 hook, exposure helper and router sources that were deployed are uncommitted working-tree files at that commit; their sha256 is recorded below." },
   deployments: [
     { file: "deployments/elysium-testnet-gen3.json", sourcePath: gen3Path, sourceSha256: gen3Sha, addedFields: ["generation", "status", "termsRegistry"] },
-    ...imported.map(({ generation, path, sha: expected }) => ({ file: manifestFor(generation).file, sourcePath: path, sourceSha256: expected, schemaVersion: 3,
+    ...imported.map(({ generation, path, sha: expected, checkedAt }) => ({ file: manifestFor(generation).file, sourcePath: path, sourceSha256: expected, schemaVersion: 3,
+      ...checkedAt ? { checkedAt } : {},
       mapping: "roles curve, registry, quoteToken, controller, termsRegistry, bidRouter, adapter, bidHook and exposureHelper; bidRules verbatim" })),
   ],
   evidence }, null, 2) + "\n");

@@ -1,5 +1,5 @@
 /** The release scripts' manifest table (plain JavaScript, shared by embed-deployments, import-live-manifests and check-package), typed for the tests. */
-export interface ManifestEntry { exportName: string; file: string; generation?: string; releaseIdPrefix: string; required: boolean }
+export interface ManifestEntry { exportName: string; file: string; generation?: string; releaseIdPrefix: string; required: boolean; family?: boolean; label?: string; launchNote?: string }
 interface ManifestsModule {
   MANIFESTS: ManifestEntry[];
   manifestFor(generation: string): ManifestEntry;

@@ -32,7 +32,7 @@ export interface AuctionDeployment extends Deployment {
   auctionBindings: { controllerRuntimeCodeHash: Hex; bidRouter: ContractPin; adapter: ContractPin;
     /** Gen8 family only: the Dynamic Bids hook and its exposure helper. */
     bidHook?: ContractPin; exposureHelper?: ContractPin };
-  /** Gen8 family only: the exact compiled bid rules (shared by Gen8 and Gen9); any other value is refused. */
+  /** Gen8 family only: the exact compiled bid rules (shared by Gen8, Gen9 and Gen10); any other value is refused. */
   bidRules?: typeof GEN8_BID_RULES;
 }
 function familyBindings(deployment: Deployment, pins: AuctionDeployment["auctionBindings"], rules: unknown): ContractPin[] {

@@ -2,22 +2,33 @@ import { keccak256 } from "viem";
 import { gen8BidHookAbi } from "./gen8-abis.js";
 import { openingFeeCurveAbi } from "./gen3-abis.js";
 import { GEN8_MAX_PRICE_LEVELS, GEN8_MIN_BID, GEN8_TOKEN_CAP } from "./gen8-bid-rules.js";
-import { launchFloorCapAbi } from "./gen9-abis.js";
-import { gen8FamilyMember, type Gen8FamilyMember } from "./gen8-family.js";
+import { launchFloorCapAbi, launchMinimumRaiseAbi } from "./gen9-abis.js";
+import { gen8FamilyMember, gen8MinimumGrossRaise, type Gen8FamilyMember } from "./gen8-family.js";
 import { check, deploymentGeneration, sameAddress } from "./validation.js";
 import type { Address } from "viem";
 import type { Anchor, RpcClient } from "./types.js";
 import type { AuctionDeployment } from "./auctions.js";
 
-/** A member whose launch controller caps the floor (Gen9) must pin a controller that reports exactly that cap, never an uncapped Gen8 one. */
+/** A member whose launch controller caps the floor (Gen9, Gen10) must pin a controller that reports exactly that cap, never an uncapped Gen8 one. */
 async function verifyFloorCap(rpc: RpcClient, controller: Address, member: Gen8FamilyMember, blockNumber: bigint): Promise<void> {
   if (member.maxFloorPriceWad === undefined) return;
   const cap = await rpc.readContract({ address: controller, abi: launchFloorCapAbi, functionName: "MAX_FLOOR_PRICE_WAD", blockNumber });
   check(cap === member.maxFloorPriceWad, "AUCTION_BINDING_MISMATCH", `The ${member.label} controller's floor cap differs from the cap this SDK mirrors`);
 }
 /**
+ * Every member pins a controller whose net minimum raise, and the gross figure derived from it, are the member's own: a Gen10 manifest cannot pin a Gen9
+ * controller ($50,000) nor the reverse. Both views are immutable-backed, so they cannot change after deployment.
+ */
+async function verifyMinimumRaise(rpc: RpcClient, controller: Address, member: Gen8FamilyMember, blockNumber: bigint): Promise<void> {
+  const base = { address: controller, abi: launchMinimumRaiseAbi, blockNumber } as const;
+  const [net, gross] = await Promise.all([rpc.readContract({ ...base, functionName: "minimumRaise" }), rpc.readContract({ ...base, functionName: "minimumGrossRaise" })]);
+  check(net === member.minimumNetRaise && gross === gen8MinimumGrossRaise(member.id), "AUCTION_BINDING_MISMATCH",
+    `The ${member.label} controller's minimum raise differs from the ${new Intl.NumberFormat("en-US").format(member.minimumNetRaise / 10n ** 6n)} USDC this SDK mirrors`);
+}
+/**
  * Gen8 family only (a no-op for other generations): the Dynamic Bids hook, its exposure helper and the terms registry must be the pinned contracts, bound to the pinned
- * router and to each other, and the hook's compiled rules must be the ones this SDK mirrors. A member with a launch floor cap also pins that cap on its controller.
+ * router and to each other, and the hook's compiled rules must be the ones this SDK mirrors. The controller must report the member's own minimum raise, and a member
+ * with a launch floor cap (Gen9, Gen10) also pins that cap on its controller.
  */
 export async function verifyGen8Graph(rpc: RpcClient, deployment: AuctionDeployment, at: Anchor, hook: Address): Promise<void> {
   const member = gen8FamilyMember(deploymentGeneration(deployment));
@@ -40,5 +51,6 @@ export async function verifyGen8Graph(rpc: RpcClient, deployment: AuctionDeploym
   "AUCTION_BINDING_MISMATCH", "Bid hook, exposure helper or terms registry differ from the manifest");
   check(minimum === GEN8_MIN_BID && cap === GEN8_TOKEN_CAP && levels === BigInt(GEN8_MAX_PRICE_LEVELS),
     "AUCTION_BINDING_MISMATCH", "The bid hook's compiled rules differ from the rules this SDK mirrors");
-  await verifyFloorCap(rpc, deployment.auctionController, member, blockNumber);
+  await Promise.all([verifyFloorCap(rpc, deployment.auctionController, member, blockNumber),
+    verifyMinimumRaise(rpc, deployment.auctionController, member, blockNumber)]);
 }
