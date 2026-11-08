@@ -10,11 +10,17 @@ export function validateData(payload:unknown,resource:string,query:object,option
   if(payload.chainId!==options.chainId||options.quoteAsset&&!same(quote.address,options.quoteAsset)
     ||!selectedIdentity(payload,selected)||!matchingItems(payload.items,resource,selected,quote.address))
     throw new DataApiError("DATA_IDENTITY_MISMATCH",200);
+  if(resource==="tokens"&&!askedTokens(payload.items,selected.ids))throw new DataApiError("DATA_IDENTITY_MISMATCH",200);
   if(["auctions","bids","markets","trades"].includes(resource)&&typeof payload.hasMore!=="boolean")
     throw new DataApiError("INVALID_RESPONSE",200);
   if(staleObservation(payload.checkedAt))
     throw new DataApiError("STALE_OBSERVATION",200);
   return payload;
+}
+/** Each item is one of the requested markets, and none is listed twice. */
+function askedTokens(items:unknown[],ids:unknown) {
+  const asked=new Set(String(ids).split(",")),listed=items.map(item=>object(item)?String(item.dealId).toLowerCase():"");
+  return listed.every(id=>asked.has(id))&&new Set(listed).size===listed.length;
 }
 function selectedIdentity(payload:Row,selected:Row) {
   return (selected.model===undefined||payload.model===selected.model)

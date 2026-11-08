@@ -7,10 +7,12 @@ export type { LaunchRpcClient, LaunchDeployment, AuctionLaunchInput, AuctionLaun
 export { auctionDurationBounds, auctionDurationBlocks, sampleSecondsPerBlock,
   AUCTION_MIN_BLOCKS_PER_HOUR, AUCTION_MAX_BLOCKS_PER_HOUR, BLOCK_RATE_SAMPLE_BLOCKS } from "./launch-duration.js";
 export { quoteAuctionFloor, validateAuctionLaunch } from "./launch-input.js";
+export { floorReachesMinimumRaise, minimumRaiseFloor, validateLaunchFloor, GEN8_OFFERED_UNITS } from "./launch-floor.js";
 export { parseLaunchDeployment } from "./launch-deployment.js";
 export { buildCreatorAccount, buildAuctionLaunch } from "./launch-transactions.js";
 export * from "./launch-abis.js";
 export * from "./gen2-abis.js";
+export * from "./gen9-abis.js";
 export { decodeOxleyRevert, type OxleyRevert, type OxleyRevertName } from "./revert.js";
 
 /** Unsigned, one-step preparation. Confirm each receipt, then call again with the same intent. */

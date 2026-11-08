@@ -1,4 +1,5 @@
 import { isAddress, maxUint256, zeroAddress, type Address, type Hex } from "viem";
+import { GEN8_FAMILY_IDS } from "./gen8-family.js";
 import type { Deployment, DeploymentGeneration } from "./types.js";
 
 export class OxleyError extends Error {
@@ -23,13 +24,18 @@ export function uint(value: unknown, positive = true): asserts value is bigint {
   check(typeof value === "bigint" && value >= (positive ? 1n : 0n) && value <= maxUint256,
     "INVALID_AMOUNT", "Amounts must be bigint uint256 base units");
 }
-const GENERATIONS = ["flat-fee", "gen2", "gen3", "gen8"];
+const GENERATIONS: readonly string[] = ["flat-fee", "gen2", "gen3", ...GEN8_FAMILY_IDS];
+/** Generations whose curve enforces the terms registry: Gen3 and every Gen8-family generation. */
+const TERMS_GENERATIONS: readonly string[] = ["gen3", ...GEN8_FAMILY_IDS];
+const list = (items: readonly string[], type: "conjunction" | "disjunction") => new Intl.ListFormat("en", { type }).format(items.map(item => `"${item}"`));
+/** Curves that check the caller against a terms registry. */
+export const requiresTerms = (generation: string | undefined): boolean => generation !== undefined && TERMS_GENERATIONS.includes(generation);
 function deploymentMetadata(d: Deployment): void {
   check(d.generation === undefined || GENERATIONS.includes(d.generation),
-    "INVALID_GENERATION", "generation must be omitted, \"flat-fee\", \"gen2\", \"gen3\" or \"gen8\"");
-  // Terms enforcement exists exactly in the Gen3 and Gen8 curves; a pin elsewhere would be an unverifiable claim.
-  const terms = d.generation === "gen3" || d.generation === "gen8";
-  check(terms === (d.termsRegistry !== undefined), "INVALID_DEPLOYMENT", "termsRegistry is required for gen3 and gen8 and forbidden otherwise");
+    "INVALID_GENERATION", `generation must be omitted, ${list(GENERATIONS, "disjunction")}`);
+  // Terms enforcement exists exactly in the Gen3 and Gen8-family curves; a pin elsewhere would be an unverifiable claim.
+  check(requiresTerms(d.generation) === (d.termsRegistry !== undefined), "INVALID_DEPLOYMENT",
+    `termsRegistry is required for ${list(TERMS_GENERATIONS, "conjunction")} and forbidden otherwise`);
   for (const text of [d.status, d.note]) check(text === undefined || (typeof text === "string" && text.length > 0),
     "INVALID_DEPLOYMENT", "status and note must be non-empty strings when present");
 }

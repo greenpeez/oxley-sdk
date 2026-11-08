@@ -3,7 +3,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { createPublicClient, http, type Address, type Hex } from "viem";
 import { createOxleyMarkets, openingSurchargeWadAt, openingFeeCurveAbi, testnetDeployments, OxleyError } from "../src/index.js";
 import { createOxleyAuctionClient } from "../src/auctions.js";
-import { gen8TestnetDeployment } from "../src/testnet-deployments.js";
+import { gen8TestnetDeployment, gen10TestnetDeployment } from "../src/testnet-deployments.js";
 
 // Read-only: no signer, no transaction, no state change. Paced to stay under the public RPC's rate limit.
 let nextRequest = 0;
@@ -77,3 +77,7 @@ for (const generation of ["gen3", "gen8"]) {
 const auctions = createOxleyAuctionClient({ publicClient, deployment: gen8TestnetDeployment });
 const graph = await auctions.verifyDeployment();
 console.log(json({ gen8AuctionGraphVerified: true, releaseId: graph.deployment.releaseId, blockNumber: graph.blockNumber }));
+
+// Gen10 (the current launch generation): the same graph plus the controller's floor cap and its $30,000 net / 30,303,030,303 gross minimum raise.
+const gen10Graph = await createOxleyAuctionClient({ publicClient, deployment: gen10TestnetDeployment }).verifyDeployment();
+console.log(json({ gen10AuctionGraphVerified: true, releaseId: gen10Graph.deployment.releaseId, blockNumber: gen10Graph.blockNumber }));

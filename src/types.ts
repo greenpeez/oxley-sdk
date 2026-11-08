@@ -1,12 +1,15 @@
 import type { Address, Hex, PublicClient } from "viem";
+import type { Gen8FamilyId } from "./gen8-family.js";
 
 export type RpcClient = Pick<PublicClient, "getChainId" | "getBlock" | "getCode" | "readContract" | "getLogs" | "call" | "estimateGas">;
 export interface ContractPin { readonly address: Address; readonly runtimeCodeHash: Hex }
 /**
- * Contract generation of a release. An absent manifest field means the deployed flat-fee release. Gen3 and Gen8 curves also
- * require the caller to have accepted the terms in the bound terms registry; Gen8 is the quote-only curve with Dynamic Bids.
+ * Contract generation of a release. An absent manifest field means the deployed flat-fee release. Gen3 and the Gen8 family
+ * (Gen8, Gen9, Gen10) also require the caller to have accepted the terms in the bound terms registry; the Gen8 family is the
+ * quote-only curve with Dynamic Bids. Gen9 is the Gen8 stack redeployed with a launch floor cap; Gen10 is the Gen9 stack with a
+ * $30,000 net minimum raise (Gen8 and Gen9: $50,000). Each keeps its own identity.
  */
-export type DeploymentGeneration = "flat-fee" | "gen2" | "gen3" | "gen8";
+export type DeploymentGeneration = "flat-fee" | "gen2" | "gen3" | Gen8FamilyId;
 export interface Deployment {
   readonly schemaVersion: 1;
   readonly releaseId: string;
@@ -17,9 +20,9 @@ export interface Deployment {
   readonly registry: ContractPin;
   readonly quoteToken: ContractPin & { readonly symbol: "USDC" | "Oxy-USDC"; readonly decimals: 6 };
   readonly auctionController: Address;
-  /** Absent: flat-fee. "gen2": exact-duration launches, breadth bid rule and trading gate. "gen3"/"gen8": terms-gated curves. */
+  /** Absent: flat-fee. "gen2": exact-duration launches, breadth bid rule and trading gate. "gen3" and the Gen8 family ("gen8", "gen9", "gen10"): terms-gated curves. */
   readonly generation?: DeploymentGeneration;
-  /** Required exactly for "gen3" and "gen8": the end-user terms registry the curve (and the Gen8 bid hook) enforces. */
+  /** Required exactly for "gen3" and the Gen8 family: the end-user terms registry the curve (and the Gen8-family bid hook) enforces. */
   readonly termsRegistry?: ContractPin;
   /** Informational release status, e.g. "planned-fork-addresses"; runtime pins remain authoritative. */
   readonly status?: string;
@@ -60,7 +63,7 @@ export interface Quote extends Anchor {
   readonly feeAmount: bigint;
   readonly feeToken: Address;
   /**
-   * Gen3/Gen8 buys: the decaying opening surcharge rate (WAD, 1e18 = 100%) the curve applied at the quote block; it is already
+   * Gen3 and Gen8-family buys: the decaying opening surcharge rate (WAD, 1e18 = 100%) the curve applied at the quote block; it is already
    * inside `feeAmount`. Execution happens later, so the charged rate can only be lower. Absent for other quotes.
    */
   readonly openingSurchargeWad?: bigint;

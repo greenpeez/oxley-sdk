@@ -228,8 +228,31 @@ local cap pre-check because the router exits the old bid first and the hook acco
 others (`GEN8_REQUIRED`). `buildDynamicBid` and `buildDynamicRebid` encode without any RPC read, and
 `encodeBidWitnesses` / `decodeBidWitnesses` convert the `data` argument. Claim and refund builders are
 unchanged: they target the resolved CCA, and delivery on Gen8 is keeper-driven. Gen3 deployments
-are rejected (`UNSUPPORTED_GENERATION`): no Gen3 auction accepts new bids. Gen8 launches use their
-own creator account and are not prepared by `/launch`.
+are rejected (`UNSUPPORTED_GENERATION`): no Gen3 auction accepts new bids. Gen8, Gen9 and Gen10 launches use their
+own creator account and are not prepared by `/launch`; its pure floor rule for them is described in
+[launch terms](launch.md#gen8-family-floor-rule).
+
+**Gen9** is the Gen8 contract stack redeployed unchanged except for the launch controller, which reverts
+`FloorPriceAboveMaximum(uint256,uint256)` for a floor above 1e21 (`GEN9_MAX_FLOOR_PRICE_WAD`, in the
+controller's `floorPriceWad` units) and exposes `MAX_FLOOR_PRICE_WAD()`. A manifest with `"generation": "gen9"`
+takes the same code paths as Gen8 (same bid rules, hook, router, witnesses and error codes), including the
+`GEN8_REQUIRED` and `DYNAMIC_BID_REQUIRED` checks, and keeps its own release and addresses; Gen8 auctions are unaffected.
+`verifyDeployment` of a Gen9 manifest also reads `MAX_FLOOR_PRICE_WAD()` on the pinned controller and refuses any other
+value. `decodeOxleyRevert` turns `FloorPriceAboveMaximum` into a short message; the error and getter are the hand-declared
+fragment `launchFloorCapAbi`. The Gen9 manifest `deployments/elysium-testnet-gen9.json` is not part of the bundle.
+
+**Gen10** is the Gen9 contract stack redeployed with one change: the launch controller's net minimum raise is **$30,000**
+instead of $50,000 (a constructor-only literal, so the runtime ABI, bid rules and error codes are Gen9's). A manifest with
+`"generation": "gen10"` takes the same code paths as Gen8 and Gen9, keeps its own release
+(`elysium-auctions-gen10-1fa4ef2a98fd14ed`, `deployments/elysium-testnet-gen10.json`) and addresses, has the same 1e21 floor cap, and
+names Gen9's terms registry, which it reuses. `verifyDeployment` reads the pinned controller's `minimumRaise()` and
+`minimumGrossRaise()` (`launchMinimumRaiseAbi`) for every family member and refuses any value but the member's own
+(`AUCTION_BINDING_MISMATCH`): a controller reporting 50,000,000,000 is refused under a Gen10 manifest and one reporting 30,000,000,000 under a Gen8 or Gen9 manifest, so a $50,000 controller cannot pass as Gen10.
+Two things follow for bidding. The hook registers an auction only when its floor can raise the controller's minimum gross raise,
+and a wallet's opening ceiling is `ceil(minimumGrossRaise / 10)`: **$3,030.303031** on Gen10 (Gen8 and Gen9: $5,050.505051). The SDK
+reads that ceiling from the hook's `preview` (`ceiling`, `allowance`), so Dynamic Bids need no other change. Which generation
+takes new launches is the application's choice (it launches on the newest generation of the family, now Gen10); the auctions client
+bids on, claims and refunds every family member alike.
 
 Gen8 currently has no active auction (its first, G8TEST, failed), so the live check
 `npm run test:live:markets` verifies the Gen8 graph, its bindings and the hook's compiled rules, while bid

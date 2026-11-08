@@ -3,6 +3,7 @@ import { ccaAuctionAbi } from "./auction-abis.js";
 import { buildAuctionClaim, buildAuctionRefund, type PartialFillHints } from "./auction-transactions.js";
 import { address, check, deploymentGeneration, hash, parseDeployment, uint } from "./validation.js";
 import { GEN8_BID_RULES } from "./gen8-bid-rules.js";
+import { GEN8_FAMILY_LABELS, GEN8_FAMILY_NAMES, isGen8Family } from "./gen8-family.js";
 import { createAuctionContext } from "./auction-context.js";
 import { createAuctionReader } from "./auction-state.js";
 import { createBidAllowanceReader } from "./auction-breadth.js";
@@ -16,6 +17,7 @@ export * from "./auction-abis.js";
 export * from "./gen2-abis.js";
 export * from "./gen3-abis.js";
 export * from "./gen8-abis.js";
+export * from "./gen9-abis.js";
 export { buildDynamicBid, buildDynamicRebid, encodeBidWitnesses, decodeBidWitnesses, type BidWitness, type DynamicBidInput } from "./gen8-bid-transactions.js";
 export { GEN8_MIN_BID, GEN8_TOKEN_CAP, GEN8_MAX_LIVE_BIDS, GEN8_MAX_WALLET_BIDS, GEN8_MAX_PRICE_LEVELS, GEN8_BID_RULES, ACCEPTED_BID_FEE_BPS,
   acceptedBidFee, bidDebit, affordableBid, walletCeiling, walletAllowance, liveBids, bidsRemaining, maximumNewBid, bidRefusal, alignBidPrice,
@@ -25,29 +27,30 @@ export type { DynamicBidLimits } from "./auction-gen8-wallet.js";
 export type { DynamicBidRequest, DynamicRebidRequest } from "./auction-gen8-bid.js";
 export { decodeOxleyRevert, type OxleyRevert, type OxleyRevertName } from "./revert.js";
 
+const SUPPORTED = new Intl.ListFormat("en").format(["flat-fee", "Gen2", ...GEN8_FAMILY_LABELS]);
 export interface AuctionDeployment extends Deployment {
   auctionBindings: { controllerRuntimeCodeHash: Hex; bidRouter: ContractPin; adapter: ContractPin;
-    /** Gen8 only: the Dynamic Bids hook and its exposure helper. */
+    /** Gen8 family only: the Dynamic Bids hook and its exposure helper. */
     bidHook?: ContractPin; exposureHelper?: ContractPin };
-  /** Gen8 only: the exact compiled bid rules; any other value is refused. */
+  /** Gen8 family only: the exact compiled bid rules (shared by Gen8, Gen9 and Gen10); any other value is refused. */
   bidRules?: typeof GEN8_BID_RULES;
 }
-function gen8Bindings(deployment: Deployment, pins: AuctionDeployment["auctionBindings"], rules: unknown): ContractPin[] {
-  if (deploymentGeneration(deployment) !== "gen8") {
-    check(!pins.bidHook && !pins.exposureHelper && rules === undefined, "INVALID_DEPLOYMENT", "Bid hook, exposure helper and bid rules belong to Gen8");
+function familyBindings(deployment: Deployment, pins: AuctionDeployment["auctionBindings"], rules: unknown): ContractPin[] {
+  if (!isGen8Family(deploymentGeneration(deployment))) {
+    check(!pins.bidHook && !pins.exposureHelper && rules === undefined, "INVALID_DEPLOYMENT", `Bid hook, exposure helper and bid rules belong to ${GEN8_FAMILY_NAMES}`);
     return [];
   }
-  check(pins.bidHook && pins.exposureHelper, "AUCTION_BINDINGS_REQUIRED", "Gen8 needs the bid hook and exposure helper pins");
+  check(pins.bidHook && pins.exposureHelper, "AUCTION_BINDINGS_REQUIRED", `${GEN8_FAMILY_NAMES} needs the bid hook and exposure helper pins`);
   check(!!rules && typeof rules === "object" && Object.keys(rules).length === Object.keys(GEN8_BID_RULES).length
     && Object.entries(GEN8_BID_RULES).every(([key, value]) => (rules as Record<string, unknown>)[key] === value),
-  "INVALID_BID_RULES", "The manifest's bid rules must be exactly the compiled Gen8 rules");
+  "INVALID_BID_RULES", `The manifest's bid rules must be exactly the compiled ${GEN8_FAMILY_NAMES} rules`);
   for (const pin of [pins.bidHook, pins.exposureHelper]) { address(pin.address); hash(pin.runtimeCodeHash); }
   return [pins.bidHook, pins.exposureHelper];
 }
 export function parseAuctionDeployment(input: unknown): AuctionDeployment {
   const deployment = parseDeployment(input);
   // Gen3 bids are not supported: its router and hook take other arguments, and no Gen3 auction accepts new bids.
-  check(deploymentGeneration(deployment) !== "gen3", "UNSUPPORTED_GENERATION", "The auctions client supports flat-fee, Gen2 and Gen8 deployments");
+  check(deploymentGeneration(deployment) !== "gen3", "UNSUPPORTED_GENERATION", `The auctions client supports ${SUPPORTED} deployments`);
   const { auctionBindings: pins, bidRules } = input as AuctionDeployment;
   check(pins && typeof pins === "object", "AUCTION_BINDINGS_REQUIRED", "Reviewed auction runtime pins are required");
   hash(pins.controllerRuntimeCodeHash);
@@ -55,7 +58,7 @@ export function parseAuctionDeployment(input: unknown): AuctionDeployment {
     check(pin && typeof pin === "object", "AUCTION_BINDINGS_REQUIRED", "Router and adapter pins required");
     address(pin.address); hash(pin.runtimeCodeHash);
   }
-  const extra = gen8Bindings(deployment, pins, bidRules);
+  const extra = familyBindings(deployment, pins, bidRules);
   const addresses = [deployment.auctionController, pins.bidRouter.address, pins.adapter.address, deployment.quoteToken.address,
     deployment.registry.address, ...extra.map(pin => pin.address), ...deployment.termsRegistry ? [deployment.termsRegistry.address] : []];
   check(new Set(addresses.map(a => a.toLowerCase())).size === addresses.length, "INVALID_DEPLOYMENT", "Auction contracts and quote token must be distinct");

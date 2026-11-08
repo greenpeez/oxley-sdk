@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "elysium-auctions-gen9-fixture0000000000",
+  "generation": "gen9",
+  "status": "fixture",
+  "note": "Test fixture only: placeholder addresses and runtime hashes derived from fixed seeds. Not a deployment. The Oxy-USDC pin is Gen8's, because Gen9 reuses it.",
+  "chainId": 99801,
+  "network": "testnet",
+  "startBlock": "19000000",
+  "curve": {
+    "address": "0xc3902a5b5e389b3a5577a302b66fc2b2427a766f",
+    "runtimeCodeHash": "0x38debf142f242723deaa9e6ccd16151a1f780801705b3113a1dc62d1370d889c"
+  },
+  "registry": {
+    "address": "0x7fa1d2cf0f19ab77910947d3f56899a87daf9613",
+    "runtimeCodeHash": "0x2974d02b1ed61adde8141de5a0116df949f13eb20cff2599cb5708378fab94e1"
+  },
+  "quoteToken": {
+    "address": "0xa4ce6e6c719f7fb524230c367948039b078683e4",
+    "runtimeCodeHash": "0x39aacdb7a8321713594376632f885dac463b2a445d211cf182ea0edc4a3e146f",
+    "symbol": "Oxy-USDC",
+    "decimals": 6
+  },
+  "auctionController": "0x07532f24cf726c5d627bb32169446b14b3f44568",
+  "termsRegistry": {
+    "address": "0xcef1c729d7f924dc7eed72c66c2afb50a9389ed0",
+    "runtimeCodeHash": "0xb0dc716e9b687a17e7753cf637753652f5efb8799ee3668418f791a099618a51"
+  },
+  "auctionBindings": {
+    "controllerRuntimeCodeHash": "0x8de1c53196ab23917005e263a1d34705a9d327cc075b5674da9c3775ed601ca9",
+    "bidRouter": {
+      "address": "0x478d3518798a6636664b08fea56b9f93e298e10b",
+      "runtimeCodeHash": "0x962543f089b70f9547178d439c7d6f01f5379a3ee1c53a942d78667585f3531f"
+    },
+    "adapter": {
+      "address": "0x90969977540ff038efadd89cc18d5e9a9f0db74e",
+      "runtimeCodeHash": "0x1ba331e2307c1d7fab3ad3e8f70362f44ee69b240bd60be94b661d7aa804b320"
+    },
+    "bidHook": {
+      "address": "0x2a25b67e7427f39c6332f31f2f4fa7565850e4aa",
+      "runtimeCodeHash": "0xbaa66bab8df4d2019c97ef0dac560a3b81764a4380bba8665d9254b687837b0b"
+    },
+    "exposureHelper": {
+      "address": "0x94038871510e118fb9a9df47aa335d4691cd56df",
+      "runtimeCodeHash": "0x97e161a35aaff2439170d2aaac232e6e5a98ff5df02f999cda4c2c586fdf8e0c"
+    }
+  },
+  "bidRules": {
+    "version": "8",
+    "minBid": "20000000",
+    "tokenCap": "30000000000000000000000000",
+    "liveBids": 3,
+    "walletBids": 12,
+    "hookMaxBids": 0,
+    "capacityMaxBids": 0,
+    "maxPriceLevels": 1000
+  }
+}

@@ -27,7 +27,11 @@ export function affordableBid(balance: bigint): bigint {
   const principal = ((balance + 1n) * 10_000n - 1n) / (10_000n + ACCEPTED_BID_FEE_BPS);
   return principal < maxUint128 ? principal : maxUint128;
 }
-/** A wallet's commitment ceiling on one auction: max(ceil(minimum gross raise / 10), what all other wallets committed / 9). */
+/**
+ * A wallet's commitment ceiling on one auction: max(ceil(minimum gross raise / 10), what all other wallets committed / 9). The opening ceiling is a tenth of
+ * the controller's `minimumGrossRaise()`: $5,050.505051 on Gen8 and Gen9 (gross 50,505,050,505), $3,030.303031 on Gen10 (gross 30,303,030,303, see
+ * `gen8MinimumGrossRaise`). The hook's `preview` is the authority; this mirrors it.
+ */
 export function walletCeiling(minimumGrossRaise: bigint, otherCommitted: bigint): bigint {
   const floor = (minimumGrossRaise + 9n) / 10n, relative = otherCommitted / 9n;
   return floor > relative ? floor : relative;

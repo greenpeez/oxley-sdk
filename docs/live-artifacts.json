@@ -23,6 +23,14 @@
       "sourceSha256": "e1d46ed2c5f257483c2a4822e1c0cc1968f61861be81145484c20625752398b9",
       "schemaVersion": 3,
       "mapping": "roles curve, registry, quoteToken, controller, termsRegistry, bidRouter, adapter, bidHook and exposureHelper; bidRules verbatim"
+    },
+    {
+      "file": "deployments/elysium-testnet-gen10.json",
+      "sourcePath": "gen10-live-20261106/gen10-deployment.json",
+      "sourceSha256": "dfbbba541ecc9049b371fa6fafb0f4bb29c6ccc6ae081cadad2de4fe408d9e8f",
+      "schemaVersion": 3,
+      "checkedAt": "2026-11-07",
+      "mapping": "roles curve, registry, quoteToken, controller, termsRegistry, bidRouter, adapter, bidHook and exposureHelper; bidRules verbatim"
     }
   ],
   "evidence": [

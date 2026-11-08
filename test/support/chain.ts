@@ -1,6 +1,7 @@
 import { keccak256, toHex, type Abi, type Address, type Hex } from "viem";
 import { readFileSync } from "node:fs";
 import type { RpcClient } from "../../src/types.js";
+import { scripts } from "./manifests.js";
 
 export const addr = (n: number) => toHex(n, { size: 20 }) as Address;
 export const id32 = (n: number | bigint) => toHex(n, { size: 32 });
@@ -10,7 +11,9 @@ export const pin = (n: number) => ({ address: addr(n), runtimeCodeHash: keccak25
 export const full = (name: string) => JSON.parse(readFileSync(new URL(`../../abis/${name}.json`, import.meta.url), "utf8")) as Abi;
 export const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 
-export type Generation = "flat-fee" | "gen3" | "gen8";
+export type Generation = "flat-fee" | "gen3" | "gen8" | "gen9" | "gen10";
+/** Gen8, Gen9 and Gen10 run one contract stack. Kept as its own literal list so the tests do not lean on the SDK's family helper. */
+export const isQuoteOnly = (generation: Generation) => generation === "gen8" || generation === "gen9" || generation === "gen10";
 /** Synthetic manifest: addresses `base+1..base+9`, the quote token (3) shared like the real graph. */
 export function manifest(generation: Generation, base: number, extra: Record<string, unknown> = {}) {
   const terms = generation !== "flat-fee";
@@ -19,11 +22,31 @@ export function manifest(generation: Generation, base: number, extra: Record<str
     curve: pin(base + 1), registry: pin(base + 2), quoteToken: { ...pin(3), decimals: 6, symbol: "Oxy-USDC" }, auctionController: addr(base + 4),
     ...terms ? { termsRegistry: pin(base + 5) } : {},
     auctionBindings: { controllerRuntimeCodeHash: keccak256(runtime), bidRouter: pin(base + 6), adapter: pin(base + 7),
-      ...generation === "gen8" ? { bidHook: pin(base + 8), exposureHelper: pin(base + 9) } : {} },
-    ...generation === "gen8" ? { bidRules: { version: "8", minBid: "20000000", tokenCap: "30000000000000000000000000", liveBids: 3,
+      ...isQuoteOnly(generation) ? { bidHook: pin(base + 8), exposureHelper: pin(base + 9) } : {} },
+    ...isQuoteOnly(generation) ? { bidRules: { version: "8", minBid: "20000000", tokenCap: "30000000000000000000000000", liveBids: 3,
       walletBids: 12, hookMaxBids: 0, capacityMaxBids: 0, maxPriceLevels: 1000 } } : {}, ...extra };
 }
-export const BASES: Record<Generation, number> = { "flat-fee": 0, gen3: 10, gen8: 20 };
+export const BASES: Record<Generation, number> = { "flat-fee": 0, gen3: 10, gen8: 20, gen9: 40, gen10: 60 };
+
+/** The checked-in Gen9 fixture manifest: placeholder addresses and runtime hashes; its Oxy-USDC pin is Gen8's. */
+export const gen9Fixture = () => JSON.parse(read("test/fixtures/elysium-testnet-gen9.fixture.json")) as ReturnType<typeof manifest>;
+/**
+ * The owner's live Gen10 deployment record (schema 3, `gen10-live-20261106/gen10-deployment.json`, release elysium-auctions-gen10-1fa4ef2a98fd14ed), byte for byte, and
+ * the SDK manifest the importer maps from it. The two agree with the bundled `deployments/elysium-testnet-gen10.json` (test/gen10.test.ts); behaviour tests use this
+ * one, so a test never depends on the bundle it also checks.
+ */
+export const gen10Record = () => JSON.parse(read("test/fixtures/gen10-production-record.json")) as Record<string, any>;
+export const gen10Fixture = () => scripts.mapProductionManifest(scripts.manifestFor("gen10"), lowerAddresses(gen10Record())) as unknown as ReturnType<typeof manifest>;
+/** The importer lower-cases every address before mapping a record. */
+export const lowerAddresses = (value: unknown) => JSON.parse(JSON.stringify(value), (_, item) => typeof item === "string" && /^0x[0-9a-fA-F]{40}$/.test(item) ? item.toLowerCase() : item);
+/**
+ * A manifest the offline RPC double can verify: every runtime code hash is the double's, and the chain ID and start block are its own.
+ * Addresses, generation, release and bindings are untouched.
+ */
+export const mockVerifiable = <T>(deployment: T): T => JSON.parse(JSON.stringify(deployment), (key, value: unknown) => {
+  if (key === "runtimeCodeHash" || key === "controllerRuntimeCodeHash") return keccak256(runtime);
+  return key === "chainId" ? 31337 : key === "startBlock" ? "1" : value;
+}) as T;
 
 export interface ReadCall { address: Address; functionName: string; args: readonly unknown[]; blockNumber: bigint }
 export interface MockState {

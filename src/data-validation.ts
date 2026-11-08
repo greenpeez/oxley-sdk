@@ -46,6 +46,20 @@ function schedule(r:Row) {
   return integer(r.startBlock)&&integer(r.endBlock)&&r.startBlock<r.endBlock
     &&(r.checkpointBlock===null||integer(r.checkpointBlock));
 }
+function secureUrl(v: unknown) {
+  if (typeof v !== "string" || v.length > 512) return false;
+  try {
+    const url = new URL(v);
+    return url.protocol === "https:" || url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  } catch { return false; }
+}
+const tokenLink = (v: unknown) => v === "" || typeof v === "string" && v.startsWith("https://") && secureUrl(v);
+const tokenImage = (v: unknown) => v === null || object(v) && typeof v.cid === "string" && v.cid.length > 0 && v.cid.length <= 128 && secureUrl(v.url);
+function token(r: Row) {
+  return integer(r.chainId) && r.chainId !== 0 && hash(r.dealId) && addresses(r, ["coin", "creator"]) && texts(r, ["name", "symbol", "description"])
+    && String(r.description).length <= 2000 && ["website", "x", "telegram"].every(k => tokenLink(r[k]))
+    && tokenImage(r.image) && integer(r.metadataRevision) && integer(r.metadataUpdatedAt);
+}
 function candleSeries(r:Row) {
   return hash(r.dealId)&&["USDC","Oxy-USDC"].includes(String(r.quoteAsset))
     &&["1m","15m","1h","1d"].includes(String(r.interval))&&uint(r.spotPriceWad)
@@ -61,6 +75,7 @@ const itemChecks:Record<string,(r:Row)=>boolean>={
   trades:r=>["buy","sell"].includes(String(r.side))&&address(r.trader)&&amounts(r,["coinAmount","quoteAmount","feeAmount","blockNumber"])
     &&integer(r.timestamp)&&integer(r.logIndex)&&hash(r.transactionHash),
   candles:candleSeries,
+  tokens:token,
   volume:r=>hash(r.dealId)&&integer(r.asOf)&&amounts(r,["volume24hQuoteUnits","previous24hQuoteUnits","volume1hQuoteUnits"])
     &&BigInt(r.volume1hQuoteUnits as string)<=BigInt(r.volume24hQuoteUnits as string)&&(r.lastTradeAt===null||integer(r.lastTradeAt)),
 };

@@ -3,6 +3,7 @@ import { auctionBidRouterAbi, auctionAdapterAbi, ccaAuctionAbi } from "./auction
 import { tokenAbi } from "./abis.js";
 import { bidInputs, buildAuctionBid, buildAuctionBidApprovals, type AuctionBidInput } from "./auction-transactions.js";
 import { address, check } from "./validation.js";
+import { GEN8_FAMILY_NAMES } from "./gen8-family.js";
 import type { AuctionContext } from "./auction-context.js";
 import type { AuctionReader } from "./auction-state.js";
 import type { BidAllowanceReader } from "./auction-breadth.js";
@@ -16,7 +17,7 @@ export function createBidPreparer(context: AuctionContext, auctions: AuctionRead
   const { resolveAt } = auctions;
   const { breadthAt, requireBidAllowed } = allowances;
   async function prepareBid(input: AuctionBidInput & { caller: Address; simulate?: boolean }) {
-    check(!context.gen8, "DYNAMIC_BID_REQUIRED", "Gen8 bids carry per-wallet witnesses: use prepareDynamicBid");
+    check(!context.gen8Family, "DYNAMIC_BID_REQUIRED", `${GEN8_FAMILY_NAMES} bids carry per-wallet witnesses: use prepareDynamicBid`);
     bidInputs(input); address(input.caller);
     const at = await anchor(), { hook, auction } = await resolveAt(input.dealId, at), blockNumber = at.blockNumber;
     check(input.deadline > at.timestamp, "EXPIRED_DEADLINE", "Supply a future Unix deadline");

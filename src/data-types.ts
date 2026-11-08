@@ -15,6 +15,8 @@ export interface MarketQuery extends DataPageQuery { dealId?: DealId; q?: string
 export interface TradeQuery extends DataPageQuery { dealId: DealId; from: number; to: number; wallet?: DataAddress }
 export interface CandleQuery { dealId: DealId; interval: CandleInterval; from: number; to: number }
 export interface VolumeQuery { dealId: DealId; asOf: number }
+/** Any number of deal IDs; the client reads them 50 at a time. IDs are matched case-insensitively and a repeat is read once. */
+export interface TokenQuery { ids: readonly string[] }
 
 export type DataFeed = "current" | "legacy";
 /** How an observation's block relates to finality: the finalized prefix itself, or the canonical chain tip (`finalizedBlock <= indexedBlock`). */
@@ -137,6 +139,19 @@ export interface CandleSeries {
 export interface MarketVolume {
   dealId: DealId; asOf: number; volume24hQuoteUnits: DecimalString;
   previous24hQuoteUnits: DecimalString; volume1hQuoteUnits: DecimalString; lastTradeAt: number | null;
+}
+
+/** The artwork of a token: a content-addressed CID and an HTTPS URL that serves it to any origin. */
+export interface TokenImage { cid: string; url: string }
+/**
+ * What the market index and the creator's saved details say about one market. `name`, `symbol`, `coin` and `creator` come from the
+ * index; the text fields are `""` and `image` is `null` until the creator publishes them, and `metadataRevision` and
+ * `metadataUpdatedAt` are `0` until details are saved. Display only: creators edit these fields, so treat them as untrusted text.
+ */
+export interface TokenInfo {
+  chainId: number; dealId: DealId; coin: DataAddress; creator: DataAddress; name: string; symbol: string;
+  description: string; website: string; x: string; telegram: string;
+  image: TokenImage | null; metadataRevision: number; metadataUpdatedAt: number;
 }
 
 export interface MarketDeploymentIdentity {

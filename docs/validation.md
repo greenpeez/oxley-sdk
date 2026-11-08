@@ -1,10 +1,18 @@
 # Validation Evidence
 
-Updated 2026-10-16. This evidence covers the SDK and its selected integration
+Updated 2026-11-07. This evidence covers the SDK and its selected integration
 surface, not whole-repository acceptance or a new contract security audit.
 
 ## Current Evidence
 
+- Gen10 support (`0.6.0-next.3`, 2026-11-07, offline only): 181 unit/ABI tests, the 17 local EVM tests (Anvil 1.7.1), typecheck, build and the
+  clean-archive consumer check pass. The bundled Gen10 manifest is the importer's mapping of the live deployment record
+  (`gen10-live-20261106/gen10-deployment.json`, sha256 in [live-artifacts.json](live-artifacts.json)); a test rebuilds it from the
+  checked-in record byte for byte. The controller's `minimumRaise` 30,000,000,000 and `minimumGrossRaise` 30,303,030,303 are the readbacks
+  recorded with that deployment; the lowest Gen10 floor the SDK computes, 101,010,101,030,162,826,490, equals the figure recorded by the
+  application's fork rehearsal. The offline suites model the controller, hook and CCA, so no Gen10 testnet read has been run by these SDK paths:
+  `npm run test:live:markets` (read-only, no signer) now also verifies the Gen10 auction graph and is the check to run against the live
+  release. No transaction was sent and no contract was deployed.
 - Current markets, terms, integrator fees and Gen8 Dynamic Bids (`0.6.0-next.1`, 2026-10-29): 129 unit/ABI
   tests, the 17 local EVM tests, typecheck, build and the clean-archive consumer check pass. New offline suites cover
   per-generation resolution, quotes and calldata against the full compiled ABIs, terms, the opening-surcharge mirror,

@@ -4,9 +4,13 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import type { Abi } from "viem";
 import { termsRegistryAbi, openingFeeCurveAbi, gen8CurveAbi, gen8BidRouterAbi, gen8BidHookAbi, ccaCheckpointAbi, gen8AdapterAbi, curveAbi, tokenAbi,
-  registryAbi, oxleyRevertAbi } from "../src/abis.js";
+  registryAbi, oxleyRevertAbi, launchMinimumRaiseAbi } from "../src/abis.js";
+import { launchMinimumRaiseAbi as fromIndex } from "../src/index.js";
+import { launchMinimumRaiseAbi as fromAuctions } from "../src/auctions.js";
+import { launchMinimumRaiseAbi as fromLaunch } from "../src/launch.js";
 import { full, read } from "./support/chain.js";
 import { matches } from "./support/abi.js";
+import { scripts } from "./support/manifests.js";
 
 const sha = (data: string | Uint8Array) => createHash("sha256").update(data).digest("hex");
 const pkg = JSON.parse(read("package.json")), evidence = JSON.parse(read("docs/live-artifacts.json"));
@@ -24,12 +28,14 @@ test("Gen3 and Gen8 ABIs are the hash-pinned compiler ABIs and are exported unde
   }
 });
 test("every typed subset entry matches the compiled ABI it claims to mirror", () => {
-  const [gen3, terms, gen8, router, hook, cca, flat, adapter] = ["ElysiumReserveCurveGen3", "OxleyTermsRegistry", "ElysiumCurveGen8", "ElysiumCcaBidRouterGen8",
-    "ElysiumDynamicBidHookGen8", "ContinuousClearingAuction", "ElysiumReserveCurveVNext", "ElysiumUniswapCcaAdapter"].map(full) as Abi[];
+  const [gen3, terms, gen8, router, hook, cca, flat, adapter, controller] = ["ElysiumReserveCurveGen3", "OxleyTermsRegistry", "ElysiumCurveGen8", "ElysiumCcaBidRouterGen8",
+    "ElysiumDynamicBidHookGen8", "ContinuousClearingAuction", "ElysiumReserveCurveVNext", "ElysiumUniswapCcaAdapter", "ElysiumBondedCcaLaunchControllerGen2"].map(full) as Abi[];
   const subsets: [string, readonly { type: string; name?: string }[], Abi][] = [
     ["terms registry", termsRegistryAbi, terms!], ["opening fee on Gen3", openingFeeCurveAbi, gen3!], ["opening fee on Gen8", openingFeeCurveAbi, gen8!],
     ["Gen8 curve", gen8CurveAbi, gen8!], ["Gen8 router", gen8BidRouterAbi, router!], ["Gen8 hook", gen8BidHookAbi, hook!],
     ["CCA checkpoints", ccaCheckpointAbi, cca!], ["adapter ceiling", gen8AdapterAbi, adapter!],
+    // The Gen8-family controller ABI is not shipped; both views are inherited from the shared controller base, as in the Gen2 controller's compiled ABI.
+    ["launch controller minimum raise", launchMinimumRaiseAbi, controller!],
     // The flat-fee entries the SDK keeps reading are unchanged in the Gen3 curve.
     ["flat-fee reads on Gen3", curveAbi, gen3!],
   ];
@@ -38,6 +44,10 @@ test("every typed subset entry matches the compiled ABI it claims to mirror", ()
   assert.ok(tokenAbi.every(entry => entry.type === "function") && registryAbi.length === 1);
   const sources = [terms!, gen3!, gen8!, router!, hook!, cca!, full("ElysiumReserveCurveGen2"), full("ElysiumBreadthCcaBidHook"), full("ElysiumBondedCcaLaunchControllerGen2")];
   for (const entry of oxleyRevertAbi) assert.ok(sources.some(abi => matches(entry, abi)), entry.name);
+});
+test("the minimum raise views are exported from every entry point and are exactly the two controller getters", () => {
+  assert.deepEqual(launchMinimumRaiseAbi.map(item => [item.type, item.name, item.stateMutability]), [["function", "minimumRaise", "view"], ["function", "minimumGrossRaise", "view"]]);
+  assert.equal(fromIndex, launchMinimumRaiseAbi); assert.equal(fromAuctions, launchMinimumRaiseAbi); assert.equal(fromLaunch, launchMinimumRaiseAbi);
 });
 test("the Gen8 manifest is the production record mapped role by role, and Gen3 keeps its reviewed pins", () => {
   const gen8 = JSON.parse(read("deployments/elysium-testnet-gen8.json")), gen3 = JSON.parse(read("deployments/elysium-testnet-gen3.json"));
@@ -49,11 +59,19 @@ test("the Gen8 manifest is the production record mapped role by role, and Gen3 k
   // Gen2 is deliberately not bundled: its 14 auctions all failed, so no market exists on its curve.
   assert.equal(JSON.parse(read("deployments/elysium-testnet-gen2.json")).status, "planned-fork-addresses");
 });
-test("every exported path exists and the changelog and README describe the released version", () => {
+test("every exported path exists (a manifest that is not required yet may be absent) and the changelog and README describe the released version", () => {
+  const optional = new Set(scripts.MANIFESTS.filter(entry => !entry.required).map(entry => `./${entry.file}`));
   for (const [path, target] of Object.entries(pkg.exports as Record<string, unknown>)) {
-    for (const file of typeof target === "string" ? [target] : [] as string[]) assert.ok(existsSync(new URL(`../${file}`, import.meta.url)), `${path} -> ${file}`);
+    for (const file of typeof target === "string" ? [target] : [] as string[]) {
+      assert.ok(existsSync(new URL(`../${file}`, import.meta.url)) || optional.has(path), `${path} -> ${file}`);
+    }
   }
-  assert.equal(pkg.version, "0.6.0-next.1");
-  assert.match(read("CHANGELOG.md"), new RegExp(`^# Changelog\\n\\n## ${pkg.version.replace(/\./g, "\\.")} - `));
+  assert.ok(optional.has("./deployments/elysium-testnet-gen9.json") && pkg.exports["./deployments/elysium-testnet-gen9.json"]);
+  // Gen10's live manifest is bundled and required.
+  assert.ok(!optional.has("./deployments/elysium-testnet-gen10.json") && existsSync(new URL("../deployments/elysium-testnet-gen10.json", import.meta.url)));
+  assert.equal(pkg.exports["./deployments/elysium-testnet-gen10.json"], "./deployments/elysium-testnet-gen10.json");
+  assert.equal(pkg.version, "0.6.0-next.3");
+  // An "Unreleased" section may sit above the released version's section.
+  assert.match(read("CHANGELOG.md"), new RegExp(`^# Changelog\\n\\n(?:## Unreleased\\n[\\s\\S]*?\\n\\n)?## ${pkg.version.replace(/\./g, "\\.")} - `));
   assert.match(read("README.md"), new RegExp(`version \`${pkg.version.replace(/\./g, "\\.")}\``));
 });

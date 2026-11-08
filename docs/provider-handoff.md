@@ -18,7 +18,7 @@ Public links: [GitHub](https://github.com/greenpeez/oxley-sdk),
 | Unsigned bid, claim and full/partial refund helpers | `@oxley/sdk/auctions`, `examples/auction.ts` |
 | Verified auction launch steps and creator-account ABIs | `@oxley/sdk/launch`, `docs/launch.md`, `examples/launch.ts` |
 | Minimal Solidity integration interface | `docs/IOxleyCurve.sol` |
-| Network, token, addresses and runtime pins | `deployments/elysium-testnet.json` (flat-fee), `elysium-testnet-gen3.json`, `elysium-testnet-gen8.json` (`0.6.0-next.1`) |
+| Network, token, addresses and runtime pins | `deployments/elysium-testnet.json` (flat-fee), `elysium-testnet-gen3.json`, `elysium-testnet-gen8.json` (`0.6.0-next.1`), `elysium-testnet-gen10.json` (`0.6.0-next.3`) |
 | Trading every current generation, terms, opening surcharge | `docs/markets.md`, `createOxleyMarkets` (`0.6.0-next.1`) |
 | Fee-bearing swaps for wallets and apps (EIP-5792 batch) | `docs/integrator-fees.md`, `examples/integrator-fee.ts` (`0.6.0-next.1`) |
 | Quote, approvals and calldata usage | `README.md`, `examples/` |
@@ -50,12 +50,13 @@ source verification is not an independent security audit or proof of mainnet rea
 ## Other Generations
 
 The table above is the flat-fee release. Newer curves hold more markets: Gen3
-(`0xb7e3e9b2ea74e3051f5c40ce7eb0486b0ab793d3`) and the quote-only Gen8
-(`0x434fd4f556800634399b9f96a4d148de215458e5`, no active market yet). Their pins live in
-`deployments/elysium-testnet-gen3.json` and `-gen8.json`. A provider integrating the SDK uses
+(`0xb7e3e9b2ea74e3051f5c40ce7eb0486b0ab793d3`), the quote-only Gen8
+(`0x434fd4f556800634399b9f96a4d148de215458e5`, no active market yet) and Gen10
+(`0x68926b5e1b479c1ba32fe8e87699dfe5cfe7bd91`, the current launch generation, with a $30,000 net minimum raise). Their pins live in
+`deployments/elysium-testnet-gen3.json`, `-gen8.json` and `-gen10.json`. A provider integrating the SDK uses
 `createOxleyMarkets`, which resolves any deal ID to its curve on chain; one that integrates
 the contracts directly must use each curve's own view and call signatures, which
-[current markets](markets.md#what-differs-by-generation) lists. Gen3 and Gen8 buys and sells also require the
+[current markets](markets.md#what-differs-by-generation) lists. Gen3 and Gen8-family (Gen8, Gen9, Gen10) buys and sells also require the
 caller (the executor, for a routed trade) to have accepted the terms once the registry
 enforces them, and pay a decaying opening surcharge on buys.
 

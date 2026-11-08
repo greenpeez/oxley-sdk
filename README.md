@@ -10,7 +10,7 @@ accessor, or Uniswap v4 hook. Providers keep their usual funding,
 transaction submission and final-recipient settlement. Fees are enforced by the
 contracts even when the SDK is bypassed.
 
-This repository contains the **Elysium SDK**, version `0.6.0-next.1`, as ESM with
+This repository contains the **Elysium SDK**, version `0.6.0-next.3`, as ESM with
 TypeScript declarations. It is a different API from the legacy `@oxley/sdk`
 `0.4.1` release. The Elysium release is the default `latest` channel. Its
 prerelease version does not imply mainnet readiness. It is not a drop-in upgrade
@@ -29,6 +29,9 @@ preparation, creator-account ABIs, exact launch-fee approvals and resumable stag
 Version `0.6.0-next.0` adds opt-in [Gen2 auction support](#gen2-auctions-exact-duration-breadth-rule-trading-gate).
 Version `0.6.0-next.1` reaches [every current market](#current-markets) (flat-fee, Gen3 and Gen8), adds
 [terms acceptance](#terms), [integrator fees](#integrator-fees) and [Gen8 Dynamic Bids](docs/auctions.md#gen8-dynamic-bids).
+Version `0.6.0-next.2` adds `data.tokens()`: name, symbol, description, socials and image for any number of markets.
+Version `0.6.0-next.3` adds [Gen10](#current-markets), the Gen9 contracts with a $30,000 net minimum raise (Gen8 and Gen9: $50,000),
+now the generation new auctions launch on; Gen8 and Gen9 markets keep trading, bidding and claiming.
 Existing swap, data and bid/claim/refund APIs remain unchanged for the deployed flat-fee release.
 Mainnet bindings remain pending; the included manifest and public feeds are testnet only.
 
@@ -61,7 +64,9 @@ dist-tags determine the default version.
 ## Auction Launches
 
 `@oxley/sdk/launch` provides `createOxleyLaunchClient`, `quoteAuctionFloor`,
-`buildCreatorAccount` and `buildAuctionLaunch`. `prepareLaunch(intent)` returns
+`buildCreatorAccount` and `buildAuctionLaunch`, and the pure floor rule of the Gen8 family
+(`floorReachesMinimumRaise`, `minimumRaiseFloor`, `validateLaunchFloor`: the lowest floor that can raise a
+generation's minimum, $30,000 net on Gen10 and $50,000 on Gen8 and Gen9). `prepareLaunch(intent)` returns
 one simulated unsigned step: setup, allowance reset, exact fee approval, launch,
 or an already-completed result. Confirm each receipt and prepare again using the
 same persisted deal ID. `getLaunch({owner,dealId})` supports restart recovery.
@@ -151,7 +156,7 @@ import { createOxleyMarkets } from '@oxley/sdk';
 const markets = createOxleyMarkets({
   publicClient: createPublicClient({ transport: http('https://testnet-rpc.elysium.kinetiq.xyz') }),
 });
-const { market, entry } = await markets.resolveMarket(dealId); // entry.generation: 'flat-fee' | 'gen3' | 'gen8'
+const { market, entry } = await markets.resolveMarket(dealId); // entry.generation: 'flat-fee' | 'gen3' | 'gen8' | 'gen10' (| 'gen9' once its manifest is bundled)
 const swap = await markets.prepareSwap({ marketId: dealId, tokenIn: market.quoteToken, tokenOut: market.coin,
   amountIn: 10_000_000n, caller: wallet, slippageBps: 50 });
 ```
@@ -160,7 +165,17 @@ const swap = await markets.prepareSwap({ marketId: dealId, tokenIn: market.quote
 | --- | --- | --- |
 | `flat-fee` | `0x18bf92514c0d749a017aaf69153442703e1a966b` | 8 (`deployments/elysium-testnet.json`) |
 | `gen3` | `0xb7e3e9b2ea74e3051f5c40ce7eb0486b0ab793d3` | 13 (`deployments/elysium-testnet-gen3.json`) |
-| `gen8` | `0x434fd4f556800634399b9f96a4d148de215458e5` | 0 so far; the current launch generation (`deployments/elysium-testnet-gen8.json`) |
+| `gen8` | `0x434fd4f556800634399b9f96a4d148de215458e5` | 0 so far; no longer the launch generation (`deployments/elysium-testnet-gen8.json`) |
+| `gen10` | `0x68926b5e1b479c1ba32fe8e87699dfe5cfe7bd91` | Start block 25237151, release `elysium-auctions-gen10-1fa4ef2a98fd14ed`; no market count recorded here; the current launch generation (`deployments/elysium-testnet-gen10.json`) |
+
+`gen10` is the Gen9 contracts redeployed with one change, the launch controller's net minimum raise: **$30,000** (about a
+$101,000 starting market cap at the lowest floor) instead of the $50,000 of Gen8 and Gen9. Its runtime ABI is Gen9's, and it
+reuses Gen9's terms registry, so a wallet that accepted the terms on a Gen9 market is accepted on Gen10. It is the generation
+new auctions launch on; Gen8 and Gen9 markets keep trading, bidding and claiming.
+
+`gen9` (the Gen8 contracts redeployed with a launch floor cap) is supported by the SDK and runs beside Gen8. Its
+manifest `deployments/elysium-testnet-gen9.json` is not part of this bundle: pass a Gen9 manifest in
+`createOxleyMarkets({ deployments: [...testnetDeployments, gen9Manifest] })` to trade its markets.
 
 Each manifest is verified by runtime code hash and by the curve's own bindings (quote token, terms
 registry). Gen2 is not bundled (every one of its auctions failed, so it holds no market) and the
@@ -204,7 +219,7 @@ Full semantics, rounding and the atomicity caveat: [integrator fees](docs/integr
 ## Indexed Data
 
 `@oxley/sdk/data` is a separate, fetch-only browser/Node client for public indexed
-auctions, bids, activity, trade history, exact volume and chart candles. No wallet
+auctions, bids, activity, trade history, exact volume, chart candles and token details. No wallet
 or RPC client is needed. It requires the deployed public data API, not an RPC URL.
 
 ```ts
@@ -216,6 +231,16 @@ const data = createOxleyDataClient({
 });
 const auctions = await data.auctions({ model: 'cca', limit: 20 });
 if (isCurrentData(auctions)) console.log(auctions.items);
+```
+
+Names, descriptions, social links and images come from `tokens`, which takes any number of deal IDs
+(the client sends 50 per request and merges the answers) and leaves out the ones the API does not list:
+
+```ts
+const dealIds = auctions.items.map(auction => auction.dealId);
+const { items } = await data.tokens({ ids: dealIds });
+for (const token of items) console.log(token.name, token.symbol, token.image?.url ?? 'no image yet');
+const unlisted = dealIds.filter(id => !items.some(token => token.dealId === id));
 ```
 
 See the [public data API guide](docs/data-api.md) for every endpoint, model
@@ -309,8 +334,10 @@ and reconcile it before retrying. A timeout is not proof that nothing was sent.
 | `buildSwapWithFee(quote,options)`, `integratorFeeAmount(basis,bps)` | Offline builder and fee arithmetic (`MAX_INTEGRATOR_FEE_BPS = 100`) |
 | `openingSurchargeWadAt(seconds)`, `buyFeeBps(rate)` | Mirror of the Gen3/Gen8 decaying surcharge schedule |
 | `getDynamicBidLimits`, `prepareDynamicBid`, `prepareDynamicRebid` from `@oxley/sdk/auctions` | Gen8 wallet limits, bids and rebids with witnesses |
+| `floorReachesMinimumRaise(gen,floor)`, `minimumRaiseFloor(gen)`, `validateLaunchFloor(gen,floor)` from `@oxley/sdk/launch` | Pure Gen8-family floor rule: lowest floor that can raise the generation's minimum ($30,000 net on Gen10, $50,000 on Gen8 and Gen9) and the Gen9/Gen10 floor cap |
+| `GEN8_FAMILY`, `gen8MinimumNetRaise(gen)`, `gen8MinimumGrossRaise(gen)` | Family table and each generation's net and gross minimum raise in USDC base units |
 | `buildZeroExBasic(swap,proportionPpm?)` from `@oxley/sdk/0x` | Optional BASIC source action, not a complete user transaction |
-| `decodeOxleyRevert(errorOrData,{generation?})` | Pure decoder for Oxley rule reverts (Gen2, terms, curve trades, Gen8 bids) into `{name,args,message}`, else `null` |
+| `decodeOxleyRevert(errorOrData,{generation?})` | Pure decoder for Oxley rule reverts (Gen2, terms, curve trades, Gen8 bids, Gen9 and Gen10 launch floor cap) into `{name,args,message}`, else `null` |
 
 All amounts use bigint base units, not floating point. Coin precision is 18;
 USDC/Oxy-USDC precision is 6. Use viem `parseUnits`/`formatUnits` at UI boundaries.

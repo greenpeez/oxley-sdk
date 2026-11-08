@@ -195,5 +195,66 @@ export const gen8TestnetDeployment = {
   }
 } as const;
 
-/** Reviewed testnet generations, oldest first: flat-fee and Gen3 hold markets, Gen8 is the current launch generation. Gen2 is not bundled: its 14 auctions all failed, so its curve holds no market (checked 2026-10-29). */
-export const testnetDeployments = [flatFeeTestnetDeployment, gen3TestnetDeployment, gen8TestnetDeployment] as const;
+// deployments/elysium-testnet-gen9.json is absent: gen9TestnetDeployment is undefined and not part of testnetDeployments until the reviewed manifest is added and `npm run embed` is run.
+export const gen9TestnetDeployment = undefined;
+
+export const gen10TestnetDeployment = {
+  "schemaVersion": 1,
+  "releaseId": "elysium-auctions-gen10-1fa4ef2a98fd14ed",
+  "generation": "gen10",
+  "status": "live",
+  "chainId": 99801,
+  "network": "testnet",
+  "startBlock": "25237151",
+  "curve": {
+    "address": "0x68926b5e1b479c1ba32fe8e87699dfe5cfe7bd91",
+    "runtimeCodeHash": "0x62df8124e054fdb33f2450a7e01981a41d965b2ce12ef64250bd0c9c84c060db"
+  },
+  "registry": {
+    "address": "0x1e59df61e52f494492cf38ca6ae49a2eba259e13",
+    "runtimeCodeHash": "0xb71ef4ea1deb4b44c28ee010a882c86a86ed5c72f21ebd43562d8f9889046df9"
+  },
+  "quoteToken": {
+    "address": "0xa4ce6e6c719f7fb524230c367948039b078683e4",
+    "runtimeCodeHash": "0x39aacdb7a8321713594376632f885dac463b2a445d211cf182ea0edc4a3e146f",
+    "symbol": "Oxy-USDC",
+    "decimals": 6
+  },
+  "auctionController": "0xff729e724c54045d04846cde960c3c5ad5e892fd",
+  "termsRegistry": {
+    "address": "0x94c8c7203e2a01e37f104fa6cbe00382642c084d",
+    "runtimeCodeHash": "0x2aebc67f8fb67759321d1367cf8306bac96b66527b719f2598976994a87f052d"
+  },
+  "auctionBindings": {
+    "controllerRuntimeCodeHash": "0x04e0f97a10560dae217ee3ea3a2a466154fe1b4decb359ad68a66a49c583383a",
+    "bidRouter": {
+      "address": "0x74f01484ff135fe25dc1c942eb31da8d43e43d76",
+      "runtimeCodeHash": "0x0a5079f82b389465ecc61fb939bfdd527f36babdaf16a1b68d1edbc4dd689d46"
+    },
+    "adapter": {
+      "address": "0xedf70a600a700b6c6fa7a4defa96f23462b69565",
+      "runtimeCodeHash": "0x458852df5cb40bc80c4475df9fd2c16aa80e80e5d1fa2712ccd20037d96e00e9"
+    },
+    "bidHook": {
+      "address": "0x86f87064955204e52ad3925c9412b3a5cd07e061",
+      "runtimeCodeHash": "0x07d4e1f2cd5cb0aaa52f71337d34a5ed21d4a09d33f5d707d2a28c691ccc4a2e"
+    },
+    "exposureHelper": {
+      "address": "0xddfc022e77664c806963040810904a1aa5e2ca46",
+      "runtimeCodeHash": "0x25c44ad1d696a4875c964b2def4ff550bd46936f97eff22d102ca69d9a6db32f"
+    }
+  },
+  "bidRules": {
+    "version": "8",
+    "minBid": "20000000",
+    "tokenCap": "30000000000000000000000000",
+    "liveBids": 3,
+    "walletBids": 12,
+    "hookMaxBids": 0,
+    "capacityMaxBids": 0,
+    "maxPriceLevels": 1000
+  }
+} as const;
+
+/** Reviewed testnet generations, oldest first: flat-fee and Gen3 hold markets, Gen10 is the current launch generation (the Gen9 contracts with a $30,000 net minimum raise) and Gen8 and Gen9 keep serving existing markets for trading, bids and claims. Gen2 is not bundled: its 14 auctions all failed, so its curve holds no market (checked 2026-10-29). Gen9 has no manifest in this bundle. */
+export const testnetDeployments = [flatFeeTestnetDeployment, gen3TestnetDeployment, gen8TestnetDeployment, gen10TestnetDeployment] as const;
