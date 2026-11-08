@@ -62,7 +62,7 @@ What it executes are the SDK's own transactions, `buildAuctionBidApprovals`, `bu
 
 `npm run test:live:auctions` verifies the deployed Gen10 graph and asserts the router's `quoteBid` for 100
 USDC; `OXLEY_AUCTION_ID` and `OXLEY_BIDDER` add an auction read and a wallet's limits. `npm run
-test:live:launch` compares the SDK's floor rules with the live adapter and controller. Both read testnet
+test:live:launch` compares the SDK's floor rules with the live adapter and controller and verifies the launch graph. Both read testnet
 only, with no signer. This page records no result of a live run; see [validation](validation.md) for what
 each script does.
 

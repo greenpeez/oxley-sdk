@@ -17,7 +17,7 @@ const root = new URL("../", import.meta.url);
 /** The live terms registry the reviewed deployment names; the mapped record must agree. */
 const TERMS_REGISTRY = { address: "0x94c8c7203e2a01e37f104fa6cbe00382642c084d", runtimeCodeHash: "0x2aebc67f8fb67759321d1367cf8306bac96b66527b719f2598976994a87f052d" };
 
-test("the bundled manifest is the live record mapped to the SDK shape: pinned by hash, equal to the embedded export, nine distinct contracts", () => {
+test("the bundled manifest is the live record mapped to the SDK shape: pinned by hash, equal to the embedded export, twelve distinct contracts", () => {
   const record = productionRecord(), fixture = recordManifest(), parsed = parseDeployment(fixture);
   // The record is the owner's file byte for byte, and the evidence file names the same hash for it.
   const recordSha = createHash("sha256").update(read("test/fixtures/production-record.json")).digest("hex");
@@ -35,7 +35,12 @@ test("the bundled manifest is the live record mapped to the SDK shape: pinned by
     ["elysium-auctions-gen10-1fa4ef2a98fd14ed", "live", 99801, "testnet", "25237151"]);
   assert.deepEqual([parsed.curve.address, parsed.registry.address, parsed.auctionController],
     ["0x68926b5e1b479c1ba32fe8e87699dfe5cfe7bd91", "0x1e59df61e52f494492cf38ca6ae49a2eba259e13", "0xff729e724c54045d04846cde960c3c5ad5e892fd"]);
-  assert.equal(deploymentAddresses(fixture).length, 9); assert.deepEqual(fixture.bidRules, BID_RULES);
+  assert.equal(deploymentAddresses(fixture).length, 12); assert.deepEqual(fixture.bidRules, BID_RULES);
+  // The launch bindings are the record's creator account factory, entry controller and bond escrow, with the launch fee (1.5 USDC) and the bond (0.5 HYPE).
+  assert.deepEqual(fixture.launchBindings, { creatorAccountFactory: { address: "0x343ce625f9930648ccebe503bd274606b376d98c", runtimeCodeHash: record.roles.creatorAccountFactory.runtimeCodeHash },
+    entryController: { address: "0x52f5728513ce57184713b109e0119f5b6455f47b", runtimeCodeHash: record.roles.entryController.runtimeCodeHash },
+    bondEscrow: { address: "0x70032f2faee1a6d25cf191b513f0dc9adf8928cb", runtimeCodeHash: record.roles.bondEscrow.runtimeCodeHash }, launchFeeBaseUnits: "1500000", deployerBondWei: "500000000000000000" });
+  assert.ok(Object.isFrozen(parsed.launchBindings) && Object.isFrozen(parsed.launchBindings.creatorAccountFactory));
   assert.deepEqual(fixture.termsRegistry, TERMS_REGISTRY);
   assert.deepEqual(record.roles.termsRegistry, { address: TERMS_REGISTRY.address, runtimeCodeHash: TERMS_REGISTRY.runtimeCodeHash });
   // The embedded module is generated: it must not drift from the JSON file.
@@ -44,9 +49,12 @@ test("the bundled manifest is the live record mapped to the SDK shape: pinned by
 test("the importer maps the record, refuses another release, an inactive record and a rehearsal, and drops every role the SDK does not read", () => {
   const record = lowerAddresses(productionRecord()), mapped = scripts.mapProductionManifest(record);
   assert.deepEqual(Object.keys(mapped), ["schemaVersion", "releaseId", "status", "chainId", "network", "startBlock", "curve", "registry", "quoteToken",
-    "auctionController", "termsRegistry", "auctionBindings", "bidRules"]);
+    "auctionController", "termsRegistry", "auctionBindings", "launchBindings", "bidRules"]);
   assert.deepEqual(mapped.quoteToken, { ...record.roles.quoteToken, symbol: "Oxy-USDC", decimals: 6 });
   assert.deepEqual(mapped.bidRules, record.bidRules);
+  assert.deepEqual(mapped.launchBindings, { creatorAccountFactory: { address: record.roles.creatorAccountFactory.address, runtimeCodeHash: record.roles.creatorAccountFactory.runtimeCodeHash },
+    entryController: { address: record.roles.entryController.address, runtimeCodeHash: record.roles.entryController.runtimeCodeHash },
+    bondEscrow: { address: record.roles.bondEscrow.address, runtimeCodeHash: record.roles.bondEscrow.runtimeCodeHash }, ...scripts.LAUNCH_COSTS });
   assert.throws(() => scripts.mapProductionManifest({ ...record, activated: false }));
   assert.throws(() => scripts.mapProductionManifest({ ...record, mode: "rehearsal" }));
   assert.throws(() => scripts.mapProductionManifest({ ...record, schemaVersion: 2 }));
@@ -86,7 +94,9 @@ test("the mainnet template has the bundled manifest's fields, with placeholders 
   assert.deepEqual(shape(template), shape(bundled)); assert.equal(template.network, "mainnet"); assert.equal(template.quoteToken.symbol, "USDC");
   assert.deepEqual(template.bidRules, BID_RULES);
   const placeholders = JSON.stringify(template).match(/null|REPLACE_WITH/g) ?? [];
-  assert.ok(placeholders.length >= 20, "deployment values are placeholders");
+  assert.ok(placeholders.length >= 26, "deployment values are placeholders");
+  // The bond is a constant of the contracts and is filled in; the launch fee is a deployment input and is a placeholder.
+  assert.deepEqual([template.launchBindings.deployerBondWei, template.launchBindings.launchFeeBaseUnits], ["500000000000000000", null]);
 });
 
 const withNetRaise = (net: bigint, cap: bigint | null = MAX_FLOOR_PRICE_WAD) => createAuctionWorld(mockVerifiable(recordManifest()), cap, net);

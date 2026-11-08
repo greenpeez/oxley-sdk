@@ -17,7 +17,8 @@ in-memory RPC doubles; no network, signer or compiler is needed. Counts: see CHA
 | Integrator fees: ordered fee batches, rounding and caps, tamper and staleness checks, EIP-5792 request | `integrator-fee.test.ts` |
 | Terms and revert decoding | `terms.test.ts`, `revert.test.ts`, `floor-cap.test.ts` |
 | Auctions: Dynamic Bids, rebids, wallet limits, witnesses, claims and exits, launch floor rules | `auctions.test.ts`, `dynamic-bids.test.ts`, `dynamic-bid-rules.test.ts`, `launch-floor.test.ts` (details in [auction validation](auction-validation.md)) |
-| ABIs and artifacts: typed subsets match the compiled ABIs, ABI and fixture hashes, package exports | `artifacts.test.ts`, `abi.test.ts` |
+| Launch client: pin and binding verification, floor rules, each step's calldata, native value, simulation failures, read-back | `launch.test.ts` (details in [launch](launch.md)) |
+| ABIs and artifacts: typed subsets match the compiled ABIs, ABI and fixture hashes, ABI-to-record evidence, package exports | `artifacts.test.ts`, `abi.test.ts` |
 | Indexed data client: see [data validation](data-validation.md) | `data.test.ts`, `data-tip.test.ts`, `market-observations.test.ts` |
 
 `npm run test:package` packs the actual archive, installs it into an unrelated project, imports every
@@ -32,7 +33,8 @@ These scripts read Elysium testnet only: no signer, no transaction. They use the
 | --- | --- | --- |
 | `npm run test:live` | Trading client `verifyDeployment`; with a market and caller, one buy quote for 1 USDC (Oxy-USDC) | `OXLEY_MARKET_ID` and `OXLEY_CALLER` (both) |
 | `npm run test:live:auctions` | Auction client `verifyDeployment` (all pins, bindings, hook rules, floor cap, minimum raise); asserts the router's `quoteBid(100 USDC)` is principal 100,000,000, debit 100,100,000, fee 100,000 | `OXLEY_AUCTION_ID` (deal ID) reads the auction; with `OXLEY_BIDDER` also that wallet's limits |
-| `npm run test:live:launch` | Auction client `verifyDeployment`, then compares `quoteAuctionFloor` with the live adapter's `effectiveFloor` for six floors and checks `validateLaunchFloor` at the lowest accepted floor and one unit below | none beyond `OXLEY_RPC_URL` |
+| `npm run test:live:launch` | Auction client `verifyDeployment`, then compares `quoteAuctionFloor` with the live adapter's `effectiveFloor` for six floors and checks `validateLaunchFloor` at the lowest accepted floor and one unit below; launch client `verifyDeployment` (launch pins, bindings, 1.5 USDC fee, 0.5 HYPE bond, duration bounds), the controller's `LAUNCH_NAMESPACE` and `dealIdFor` against `launchDealId`, and a launch prepared for an unfunded wallet, which must be refused with `INSUFFICIENT_QUOTE` after every chain read succeeded | `OXLEY_LAUNCH_OWNER` and `OXLEY_LAUNCH_SALT` read back an existing launch |
+| `npm run test:live:abis` | For every contract in `live-artifacts.json`: the chain's runtime code with the compiler's immutable slots zeroed hashes to the published build's runtime template, and its hash is the manifest's pin; the creator account is checked on an account the factory created | none beyond `OXLEY_RPC_URL` |
 | `npm run test:live:markets` | Opening-surcharge schedule against the curve's `surchargeWadAt` (0 to 70 s), trading and auction `verifyDeployment`; with a market, its status, quotes, fee-bearing buy and sell batches and terms status | `OXLEY_MARKET_ID` |
 
 The market check uses placeholder holder and recipient addresses, so it needs no funded wallet and its fee
@@ -51,9 +53,29 @@ exits. See [auction validation](auction-validation.md).
 ## Provenance
 
 - [live-artifacts.json](live-artifacts.json): the live deployment record the bundled manifest is mapped
-  from (source path and sha256), and the compiler ABIs of the curve, bid router, bid hook and terms
-  registry (artifact, ABI file and Solidity source sha256). `artifacts.test.ts` checks the ABI file
-  hashes and `deployment.test.ts` checks the record hash and that the manifest is its exact mapping.
+  from (source path and sha256), the compiler job that built the deployed contracts (`compiledGraphSha256`, compiler
+  settings, source commit), and for each of the twelve Oxley contracts the SDK touches its ABI file and Solidity
+  source sha256, the build's creation-code and runtime-template keccak256, the immutable slots and the deployed pin.
+  How the ABIs are tied to the deployed code is below. `artifacts.test.ts` checks the ABI file hashes and the evidence
+  against the manifest and the record, and `deployment.test.ts` checks the record hash and that the manifest is its exact mapping.
+
+### Which Build The ABIs Come From
+
+The deployment record names `compiledGraphSha256` (`2b7ad321...`): the identity of the compiler job whose output was deployed
+(solc 0.8.26, Cancun, optimizer 200 runs, no metadata hash). `scripts/import-live-manifests.mjs` refuses to write an ABI unless:
+
+1. the compiled-graph file hashes to its own identity, with the deploy tooling's canonical-JSON rule, and that identity is the record's;
+2. every one of the graph's 109 sources is byte-identical in the worktree the artifacts were read from;
+3. the forge artifact's creation code and runtime template hash to the graph's `creationCodeKeccak256` and `runtimeTemplateKeccak256`,
+   and its ABI and immutable slots equal the graph's;
+4. a contract with no immutable slots (the exposure helper, the entry controller) has a runtime template equal to its pinned runtime code hash,
+   which proves the artifact against the record with no chain read.
+
+`npm run test:live:abis` then compares chain code with the same templates: with the immutable slots zeroed, the code at every pinned address
+hashes to the template, and unmasked it hashes to the pin; a creator account created by the factory hashes to the creator account template.
+Nothing is recompiled in this repository. Not proved: that the compiler would reproduce the artifacts from the sources on another machine
+(the worktree's own forge build reproduced all twelve creation-code and runtime-template hashes), and anything about the immutable values themselves, which are the constructor
+arguments the verification reads back through the clients.
 - [auction-artifacts.json](auction-artifacts.json): the vendor continuous clearing auction (published ABI
   and fixture) and the retained scaffolding fixtures used by the EVM suite, each sha256-pinned.
   `test/fixtures/provenance.json` pins the retained fee router and test token the same way.
@@ -77,8 +99,9 @@ exits. See [auction validation](auction-validation.md).
   route is settled on an executor in this repository, and calldata compatibility is not source acceptance.
 - No real-bytecode curve settlement test exists for this release: the Gen10 creation bytecode is not in
   this repository, so the earlier real-bytecode curve and 0x BASIC settlement test was removed.
-- The registry and controller compiler ABIs are not shipped. Their typed subsets are therefore not
-  cross-checked against compiled ABIs here; only the curve, bid router, bid hook, terms registry and
-  vendor auction are, plus the adapter against its retained fixture.
+- The compiler ABIs are the deployed Gen10 build's, but the quote token's is not: Oxy-USDC is an external contract, so `tokenAbi` is an
+  ERC-20 subset with no compiled counterpart here.
+- The launch client is tested against a modelled launch graph and read-only against the live chain; no launch transaction has been sent by
+  it, so the later steps (approval, launch) are simulated only offline. `test:live:launch` stops at an unfunded wallet.
 - Auction transactions are executed locally only through retained scaffolding, not the deployed Gen10 router,
   hook or adapter. Dynamic Bid and rebid preparation is tested against a modelled hook and auction.

@@ -17,6 +17,13 @@
     "bidHook": { "address": null, "runtimeCodeHash": null },
     "exposureHelper": { "address": null, "runtimeCodeHash": null }
   },
+  "launchBindings": {
+    "creatorAccountFactory": { "address": null, "runtimeCodeHash": null },
+    "entryController": { "address": null, "runtimeCodeHash": null },
+    "bondEscrow": { "address": null, "runtimeCodeHash": null },
+    "launchFeeBaseUnits": null,
+    "deployerBondWei": "500000000000000000"
+  },
   "bidRules": {
     "version": "8",
     "minBid": "20000000",

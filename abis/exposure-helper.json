@@ -1,0 +1,70 @@
+[
+  {
+    "type": "function",
+    "name": "exposure",
+    "inputs": [
+      {
+        "name": "auction",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "ids",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "hints",
+        "type": "tuple[]",
+        "internalType": "struct BidWitness[]",
+        "components": [
+          {
+            "name": "lastFull",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "outbid",
+            "type": "uint64",
+            "internalType": "uint64"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "tuple",
+        "internalType": "struct ElysiumBidExposureGen8.Exposure",
+        "components": [
+          {
+            "name": "tokens",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "ownCommitted",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "otherCommitted",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "clearing",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "error",
+    "name": "InvalidWitness",
+    "inputs": []
+  }
+]

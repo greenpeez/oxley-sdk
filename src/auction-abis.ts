@@ -1,6 +1,6 @@
 import { parseAbi } from "viem";
 
-/** Typed integration subsets; the full compiler ABIs of the router, hook, curve, terms registry and CCA are exported as JSON under `@oxley/sdk/abis/`. */
+/** Typed integration subsets. Every one is tested against the full compiler ABI of its contract, exported as JSON under `@oxley/sdk/abis/` (`auction-controller.json`, `adapter.json`, `bid-router.json`, `bid-hook.json`, `cca-auction.json`, ...). */
 export const auctionControllerAbi = parseAbi([
   "function feeBidRouter() view returns (address)",
   "function ccaAdapter() view returns (address)",
@@ -12,17 +12,14 @@ export const auctionControllerAbi = parseAbi([
   "event CcaDealOpened(bytes32 indexed dealId,bytes32 indexed auctionId,address indexed coin,address creator,string name,string symbol,uint64 endBlock)",
   "event CcaDealFailed(bytes32 indexed dealId)",
 ]);
-/**
- * The launch controller's floor cap. This is a hand-declared fragment, not a compiler ABI: the controller ABI is not shipped in this
- * package. Signature and parameter names match the compiled controller (oxley compiled graph a5de0335…).
- */
+/** The launch controller's floor cap: a fragment of `@oxley/sdk/abis/auction-controller.json`, checked against it. */
 export const launchFloorCapAbi = parseAbi([
   "function MAX_FLOOR_PRICE_WAD() view returns (uint256)",
   "error FloorPriceAboveMaximum(uint256 floorPriceWad,uint256 maximum)",
 ]);
 /**
  * The launch controller's minimum raise (an immutable set by the constructor): `minimumRaise()` is the net amount in USDC base units
- * ($30,000) and `minimumGrossRaise()` is that amount grossed up for the 1% platform fee. Also a hand-declared fragment.
+ * ($30,000) and `minimumGrossRaise()` is that amount grossed up for the 1% platform fee. Also a checked fragment of the controller ABI.
  */
 export const launchMinimumRaiseAbi = parseAbi([
   "function minimumRaise() view returns (uint256)",
@@ -60,7 +57,7 @@ export const bidHookAbi = parseAbi([
   "error UnauthorizedBid()", "error WalletBidLimitReached(address owner,uint256 limit)",
   "error WalletCapExceeded(address owner,uint256 requested,uint256 remainingAllowance)",
 ]);
-/** The adapter creates the CCA from a launch; `MAX_CCA_BID_PRICE_Q96` is the highest price the pinned CCA accepts and `effectiveFloor` the launch floor it rounds to a tick. */
+/** The adapter creates the CCA from a launch; `MAX_CCA_BID_PRICE_Q96` is the highest price the pinned CCA accepts and `effectiveFloor` the launch floor it rounds to a tick. Full compiler ABI: `@oxley/sdk/abis/adapter.json`. */
 export const auctionAdapterAbi = parseAbi([
   "function controller() view returns (address)",
   "function quoteAsset() view returns (address)",
@@ -101,8 +98,9 @@ export const ccaCheckpointAbi = parseAbi([
   "event CheckpointUpdated(uint256 blockNumber,uint256 clearingPriceQ96,uint24 cumulativeMps)",
 ]);
 /**
- * Rule errors decoded by `decodeOxleyRevert`: terms and curve trade errors, the Dynamic Bids hook and router, plus the CCA's wrapper around
- * validation-hook reverts. The launch controller's `FloorPriceAboveMaximum` is decoded from `launchFloorCapAbi`.
+ * Rule errors decoded by `decodeOxleyRevert`: terms and curve trade errors, the Dynamic Bids hook and router, the launch controller's, creator account's,
+ * bond escrow's and entry controller's launch errors, plus the CCA's wrapper around validation-hook reverts. The controller's `FloorPriceAboveMaximum`
+ * is decoded from `launchFloorCapAbi`.
  */
 export const oxleyRevertAbi = parseAbi([
   "error WalletCapExceeded(address owner,uint256 requested,uint256 remainingAllowance)",
@@ -114,4 +112,8 @@ export const oxleyRevertAbi = parseAbi([
   "error WalletBidLimitReached(address owner,uint256 limit)", "error BidAmountTooLow()", "error PriceLevelLimit(uint256 maxPrice)",
   "error BidPriceTooHigh(uint256 submitted,uint256 maximum)", "error InvalidWitness()",
   "error BidExpired()", "error NotBidOwner()", "error BidNotOutbid()", "error RebidPriceTooLow(uint256 maxPrice,uint256 clearing)",
+  "error TradeMoveLimit()",
+  "error TickerUnavailable(string symbol)", "error InvalidTicker()", "error ReservedTicker(bytes32 canonicalKey)", "error InvalidListingCommitment()",
+  "error InvalidDurationBlocks(uint32 durationBlocks,uint32 minimumBlocks,uint32 maximumBlocks)", "error InvalidRequestedHours(uint8 requestedHours)",
+  "error FixtureLaunchOnly()", "error NewEntriesPaused()", "error GasPriceTooHigh()", "error NeedsFunding(uint256 balance,uint256 required)",
 ]);

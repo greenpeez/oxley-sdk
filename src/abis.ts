@@ -1,7 +1,9 @@
 import { parseAbi } from "viem";
 export * from "./auction-abis.js";
 export * from "./curve-abis.js";
+export * from "./launch-abis.js";
 
+/** Full compiler ABI: `@oxley/sdk/abis/registry.json`. */
 export const registryAbi = parseAbi([
   "function deal(bytes32) view returns ((address creator,address coin,address controller,address reserveAsset,uint8 profile,uint8 status,uint64 createdAt,uint64 activatedAt,bytes32 profileDigest))",
 ]);

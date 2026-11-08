@@ -4,7 +4,9 @@ import { launchFloorCapAbi, oxleyRevertAbi } from "./auction-abis.js";
 export type OxleyRevertName = "WalletCapExceeded" | "CreatorBidNotAllowed" | "TradingNotOpen"
   | "TermsNotAccepted" | "BuysPaused" | "MinimumNotMet"
   | "DeadlineExpired" | "QuoteDust" | "CapitalShortfall" | "WalletBidLimitReached" | "BidAmountTooLow" | "PriceLevelLimit"
-  | "BidPriceTooHigh" | "InvalidWitness" | "BidExpired" | "NotBidOwner" | "BidNotOutbid" | "RebidPriceTooLow" | "FloorPriceAboveMaximum";
+  | "BidPriceTooHigh" | "InvalidWitness" | "BidExpired" | "NotBidOwner" | "BidNotOutbid" | "RebidPriceTooLow" | "FloorPriceAboveMaximum" | "TradeMoveLimit"
+  | "TickerUnavailable" | "InvalidTicker" | "ReservedTicker" | "InvalidListingCommitment" | "InvalidDurationBlocks" | "InvalidRequestedHours" | "FixtureLaunchOnly"
+  | "NewEntriesPaused" | "GasPriceTooHigh" | "NeedsFunding";
 export interface OxleyRevert {
   readonly name: OxleyRevertName;
   readonly args: readonly unknown[];
@@ -27,7 +29,7 @@ function candidates(value: unknown, out: Hex[], depth = 0): Hex[] {
   }
   return out;
 }
-/** The rule errors plus the launch controller's floor cap error, which has no compiled ABI in this package. */
+/** The rule errors plus the launch controller's floor cap error (`FloorPriceAboveMaximum`, a fragment of the controller's compiler ABI). */
 const revertAbi = [...oxleyRevertAbi, ...launchFloorCapAbi] as const;
 function decodeResult(data: Hex) {
   try { return decodeErrorResult({ abi: revertAbi, data }); } catch { return null; }
@@ -57,6 +59,17 @@ const MESSAGES: Partial<Record<OxleyRevertName, (args: Args, context: RevertCont
   BidNotOutbid: () => "Only an outbid bid can be rebid",
   RebidPriceTooLow: () => "A rebid must be priced above the current clearing price",
   // Owner-supplied signature FloorPriceAboveMaximum(uint256,uint256): args are the requested floor and the maximum, both in floorPriceWad units.
+  TradeMoveLimit: () => "This trade would move the price by more than the 4.5% limit on one trade; try a smaller amount",
+  TickerUnavailable: args => `The ticker ${JSON.stringify(args[0])} is taken by an open auction or held for a scheduled launch`,
+  InvalidTicker: () => "A ticker is 1 to 10 ASCII letters or digits",
+  ReservedTicker: () => "This ticker is reserved",
+  InvalidListingCommitment: () => "The listing commitment must be 0%, 50% or 100%",
+  InvalidDurationBlocks: args => `${args[0]} blocks is outside the ${args[1]} to ${args[2]} the chosen hours allow; the block rate may have changed, so prepare the launch again`,
+  InvalidRequestedHours: () => "An auction lasts 1 to 24 whole hours",
+  FixtureLaunchOnly: () => "Public launches are not enabled on this controller",
+  NewEntriesPaused: () => "New launches are paused",
+  GasPriceTooHigh: () => "The gas price is above the cap the operating bond repays; wait for a lower gas price and prepare again",
+  NeedsFunding: () => "The operating bond does not cover the auction's delivery gas at the current gas price; wait for a lower gas price and prepare again",
   FloorPriceAboveMaximum: (args, { symbol }) => `The ${symbol} floor price is above the maximum this release allows; use a floor of at most ${args[1]} (floorPriceWad units)`,
 };
 function explainRevert(result: NonNullable<ReturnType<typeof decodeResult>>, context: RevertContext): OxleyRevert | null {
@@ -75,7 +88,7 @@ function decode(data: Hex, context: RevertContext, depth: number): OxleyRevert |
   return explainRevert(result, context);
 }
 /**
- * Pure decoder for Oxley rule reverts (terms, curve trades and the trading gate, Dynamic Bids and rebids, and the launch floor cap). Accepts raw
+ * Pure decoder for Oxley rule reverts (terms, curve trades and the trading gate, Dynamic Bids and rebids, and the launch rules: floor cap, ticker, duration, pause, gas price). Accepts raw
  * revert data or a viem/EIP-1193 error object and returns null for anything else (including unrelated custom errors). Never performs RPC calls.
  */
 export function decodeOxleyRevert(errorOrData: unknown, options: { quoteSymbol?: string } = {}): OxleyRevert | null {

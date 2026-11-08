@@ -1,16 +1,17 @@
 # Oxley SDK
 
 Public, provider-neutral TypeScript SDK for Oxley on Elysium. It supports one contract
-release, **Gen10**: Dynamic Bid auctions, the markets they create, and the swaps, quotes and
-terms of those markets. Everything is read from chain through a caller-supplied viem public
+release, **Gen10**: launching an auction, Dynamic Bid auctions, the markets they create, and the
+swaps, quotes and terms of those markets. Everything is read from chain through a caller-supplied viem public
 client and returned as **unsigned** calldata; the SDK never signs, broadcasts or holds keys.
 It runs in Node.js 20+ and browser applications, with no Oxley API key, backend, callback,
 provider allowlist or Uniswap v4 hook.
 
-This repository contains the **Elysium SDK**, version `0.7.0-next.0`, as ESM with
-TypeScript declarations. It is a breaking release: the earlier flat-fee, Gen2, Gen3, Gen8
-and Gen9 support, `createOxleyMarkets` and the launch client are gone (see the
-[changelog](CHANGELOG.md) for the removals and an old to new table of renamed exports).
+This repository contains the **Elysium SDK**, version `0.7.0-next.1`, as ESM with
+TypeScript declarations. The `0.7` line is a breaking release: the earlier flat-fee, Gen2,
+Gen3, Gen8 and Gen9 support and `createOxleyMarkets` are gone, and the launch client is back
+for Gen10 only (see the [changelog](CHANGELOG.md) for the removals and an old to new table of
+renamed exports).
 It is a different API from the legacy `@oxley/sdk` `0.4.1` release, whose
 `@oxley/sdk/release` and `@oxley/sdk/evm` consumers should stay on `0.4.1`. The prerelease
 version does not imply mainnet readiness: the included manifest and public feeds are
@@ -22,10 +23,14 @@ npm install @oxley/sdk
 
 ## For AI Agents And Bots
 
-An agent can run the whole auction lifecycle with a public RPC and its own wallet:
+An agent can run the whole auction lifecycle, from the launch to the claim, with a public RPC and its own wallet:
 
 | Step | Call | Result |
 | --- | --- | --- |
+| Check the launch graph | `launches.verifyDeployment()` | The auction graph plus the creator account factory, entry controller and bond escrow: pins, bindings, launch fee, operating bond and duration bounds verified at one block |
+| Check a floor | `validateLaunchFloor(floorPriceWad)` | The $30,000 minimum raise and the 1e21 cap, before any read |
+| Prepare a launch step | `launches.prepareLaunch({ owner, draftSalt, name, symbol, floorPriceWad, creatorLockDays, listingCommitmentBps, auctionDurationHours })` | The next unsigned, simulated step: accept the terms, create the creator account, approve the 1.5 USDC fee to it, then launch with the 0.5 HYPE operating bond as the transaction's value |
+| Read the launch back | `launches.getLaunch({ owner, draftSalt })` | Creator account, coin, auction, end block, duration schedule and bond; `prepareLaunch` returns it as `stage: 'complete'` |
 | Check the deployment | `auctions.verifyDeployment()` | Pins, bindings, bid rules, floor cap and minimum raise verified at one block |
 | Read limits | `auctions.getDynamicBidLimits({ dealId, owner })` | Wallet ceiling, allowance, live-bid slots, balance, terms standing, `maximumBid` |
 | Prepare a Dynamic Bid | `auctions.prepareDynamicBid({ dealId, caller, entered, maxPriceQ96 })` | Exact approvals and the bid transaction, with witnesses and a derived previous tick |
@@ -38,17 +43,19 @@ Each result carries structured errors (`OxleyError.code`, `details`) so an agent
 without parsing text, and `decodeOxleyRevert` turns a wallet or RPC revert into a short
 reason. The agent signs and sends every transaction itself, confirms receipts, and prepares
 again from fresh chain state; a timeout is never proof that nothing was sent. Work through
+[the launch guide](docs/launch.md) and its [example](examples/launch.ts), then
 [the auction guide](docs/auctions.md) and its [example](examples/dynamic-bid.ts).
 
 ## Start Here
 
 - [Public Builders docs](https://oxley.fun/docs/builders) and [npm package](https://www.npmjs.com/package/@oxley/sdk).
+- Launching an auction: [launch guide](docs/launch.md) (steps, costs, native bond, errors) and [example](examples/launch.ts).
 - Auction participation: [Dynamic Bids, rebids, claim and refund guide](docs/auctions.md) and examples ([bid and rebid](examples/dynamic-bid.ts), [exit and claim](examples/auction.ts)).
 - Trading the markets auctions create, terms and the opening surcharge: [markets](docs/markets.md).
 - Aggregators and exchanges: [provider handoff](docs/provider-handoff.md), [0x source guide](docs/0x.md), [mainnet requirements](docs/mainnet.md).
 - Wallets and apps adding their own fee: [integrator fees](docs/integrator-fees.md) and [example](examples/integrator-fee.ts).
 - Frontend builders: [indexed data API](docs/data-api.md) and [polling example](examples/live-data.ts).
-- Launch floors: [launch floor rules](docs/launch.md) and [example](examples/launch-floor.ts).
+- Launch floors: [launch floor rules](docs/launch.md#launch-floor-rules) and [example](examples/launch-floor.ts).
 - Evidence: [validation overview](docs/validation.md), [auction tests](docs/auction-validation.md), [live data checks](docs/data-validation.md).
 
 ## Release Channel
@@ -72,11 +79,11 @@ dist-tags determine the default version.
 | --- | --- |
 | `@oxley/sdk` | Trading client (`createOxleyClient`), swaps and integrator fees, terms, opening-surcharge mirror, `parseDeployment`, `testnetDeployment`, `decodeOxleyRevert`, the raise constants and typed ABIs |
 | `@oxley/sdk/auctions` | `createOxleyAuctionClient`, Dynamic Bid and rebid builders, claim and refund builders, the bid-rule helpers and constants, typed auction ABIs |
-| `@oxley/sdk/launch` | Pure launch-floor rules (`validateLaunchFloor`, `minimumRaiseFloor`, `quoteAuctionFloor`); the SDK does not prepare launch transactions |
+| `@oxley/sdk/launch` | `createOxleyLaunchClient` (verify, `prepareLaunch`, `getLaunch`), the offline launch builders, `launchDealId`, `newDraftSalt`, the exact-duration helpers, the launch ABIs and the pure launch-floor rules (`validateLaunchFloor`, `minimumRaiseFloor`, `quoteAuctionFloor`) |
 | `@oxley/sdk/abis` | Every typed ABI subset |
 | `@oxley/sdk/0x` | `buildZeroExBasic`, the optional 0x BASIC source action |
 | `@oxley/sdk/data` | `createOxleyDataClient`: fetch-only client for the public indexed data API |
-| `@oxley/sdk/abis/*.json` | Full compiler ABIs: `curve`, `bid-router`, `bid-hook`, `terms-registry`, `cca-auction` |
+| `@oxley/sdk/abis/*.json` | Full compiler ABIs of the deployed Gen10 build: `curve`, `bid-router`, `bid-hook`, `terms-registry`, `auction-controller`, `adapter`, `registry`, `exposure-helper`, `creator-account`, `creator-account-factory`, `bond-escrow`, `entry-controller`, and the vendor `cca-auction`. Each typed ABI subset is tested against its file; [live-artifacts.json](docs/live-artifacts.json) proves which build they come from |
 | `@oxley/sdk/deployments/*.json` | `elysium-testnet.json` (reviewed Gen10 testnet manifest) and `mainnet.template.json` |
 
 ## Auctions
@@ -110,6 +117,41 @@ if (limits.maximumBid >= limits.minimumBid) {
 - Auctions succeed or fail by their minimum raise: a controller `minimumRaise()` of 30,000 USDC net (30,303,030,303 gross), a launch floor capped at 1e21 `floorPriceWad`.
 
 See [auction integration](docs/auctions.md) and [auction validation](docs/auction-validation.md).
+
+## Launching
+
+`createOxleyLaunchClient` binds the same reviewed deployment and prepares a launch as unsigned, simulated
+steps. Each call verifies the launch graph at one block, applies the launch-floor rules, reads the launch's
+state, and returns only the next step; you confirm its receipt and call again.
+
+```ts
+import { createPublicClient, http, parseUnits } from 'viem';
+import { testnetDeployment } from '@oxley/sdk';
+import { createOxleyLaunchClient, newDraftSalt } from '@oxley/sdk/launch';
+
+const launches = createOxleyLaunchClient({
+  deployment: testnetDeployment,
+  publicClient: createPublicClient({ transport: http('https://testnet-rpc.elysium.kinetiq.xyz') }),
+});
+const intent = { owner, draftSalt: newDraftSalt(), name: 'Example Coin', symbol: 'EXAMPLE',
+  floorPriceWad: parseUnits('0.00015', 24), creatorLockDays: 30, listingCommitmentBps: 5000, auctionDurationHours: 6 } as const;
+const step = await launches.prepareLaunch(intent); // persist draftSalt with the terms first
+if (step.stage !== 'complete') {
+  // step.stage: 'terms' | 'setup' | 'reset' | 'approve' | 'launch'; sign and send step.transaction from the owner.
+}
+```
+
+- The steps are the terms acceptance (only while the terms registry enforces it), the creator account created by the
+  factory, the launch-fee approval **to that account**, and the launch call, whose exact arguments include an exact
+  duration in blocks (14,400 to 72,000 per hour, from your `secondsPerBlock` or the measured block rate).
+- **Costs.** The launch fee is 1.5 USDC (Oxy-USDC on testnet). The creator's wallet also pays native HYPE: the launch
+  transaction carries the 0.5 HYPE operating bond as its `value` (exactly), and every step costs gas. The bond is held by
+  the bond escrow for the auction's delivery and refund gas, and unused bond returns to the original creator through the
+  creator account. The SDK adds no sponsorship and no conversion, and HYPE is not a fee, bid or trade asset.
+- The launch step carries the `gasPrice` it was simulated at and is refused above the 1 gwei the bond escrow accepts.
+- A failed simulation is an `OxleyError` (`SIMULATION_FAILED`) with the stage and the decoded rule. Scheduled launches are not prepared.
+
+See the [launch guide](docs/launch.md) and [example](examples/launch.ts).
 
 ## Markets, Terms And Swaps
 
@@ -223,7 +265,7 @@ and reconcile it before retrying. A timeout is not proof that nothing was sent.
 
 | Method/export | Result |
 | --- | --- |
-| `parseDeployment(json)` | Validated, frozen manifest: nine distinct pinned contracts and the exact bid rules |
+| `parseDeployment(json)` | Validated, frozen manifest: twelve distinct pinned contracts (the auction graph and the launch bindings), the launch fee and bond, and the exact bid rules |
 | `createOxleyClient({publicClient,deployment})` | Independent RPC trading client; no hosted Oxley service |
 | `verifyDeployment()` | Chain, runtime hash, quote binding, decimals and terms-registry binding checks |
 | `discoverMarkets({cursor?,fromBlock?,toBlock?,pageSize?,coin?})` | Event-based page of active markets and canonical cursor |
@@ -237,6 +279,9 @@ and reconcile it before retrying. A timeout is not proof that nothing was sent.
 | `prepareSwapWithFee({...request,feeRecipient,feeBps})`, `checkSwapWithFee(prepared,simulate?)` | Ordered fee-bearing call batch, EIP-5792 request and sequential fallback; re-quote and re-derive every call |
 | `buildSwapWithFee(quote,options)`, `integratorFeeAmount(basis,bps)` | Offline builder and fee arithmetic (`MAX_INTEGRATOR_FEE_BPS = 100`) |
 | `openingSurchargeWadAt(seconds)`, `buyFeeBps(rate)` | Mirror of the curve's decaying opening surcharge schedule |
+| `createOxleyLaunchClient({publicClient,deployment})` from `@oxley/sdk/launch` | `verifyDeployment`, `getLaunch({owner,draftSalt,beneficiary?})`, `prepareLaunch({owner,draftSalt,name,symbol,floorPriceWad,creatorLockDays,listingCommitmentBps,auctionDurationHours,durationBlocks?,secondsPerBlock?,beneficiary?})` |
+| `buildCreatorAccount`, `buildLaunchApprovals`, `buildAuctionLaunch`, `launchDealId`, `newDraftSalt` from `@oxley/sdk/launch` | Offline encoders for the launch steps (`buildAuctionLaunch` returns the bond as `value`), the controller's deal id and a random draft salt |
+| `auctionDurationBounds(hours)`, `auctionDurationBlocks({hours,secondsPerBlock})`, `sampleSecondsPerBlock(client,options?)` from `@oxley/sdk/launch` | The 14,400 to 72,000 blocks an hour the controller accepts, the conversion from a block rate, and a rate measured over recent blocks |
 | `createOxleyAuctionClient({publicClient,deployment})` from `@oxley/sdk/auctions` | `verifyDeployment`, `getAuction`, `getDynamicBidLimits`, `prepareDynamicBid`, `prepareDynamicRebid`, `prepareClaim`, `prepareRefund` |
 | `buildDynamicBid`, `buildDynamicRebid`, `buildAuctionClaim`, `buildAuctionRefund`, `buildAuctionBidApprovals` | Offline encoders for the same transactions |
 | `MIN_BID`, `TOKEN_CAP`, `MAX_LIVE_BIDS`, `MAX_WALLET_BIDS`, `BID_RULES`, `bidRefusal`, `walletCeiling`, ... | Bid rules and the pure helpers that mirror the hook |
@@ -256,7 +301,9 @@ Serialize bigint values as decimal strings at JSON boundaries.
   by the separate `/auctions` client; they are not atomic swap routes. The `/data` client
   is read-only. No SDK client signs or broadcasts.
 - Bridge transfers, mint and twin markets, native-asset bid or trade payments and
-  exact-output trading remain outside the package's scope.
+  exact-output trading remain outside the package's scope. A launch is the one transaction
+  that carries native value: the creator's 0.5 HYPE operating bond, which the creator pays
+  with the gas of its steps (see [launching](docs/launch.md)).
 - A market is identified by `(chainId, curve, marketId)`. Do not assume token
   symbols are identities.
 - Native on-chain reads are `quoteBuy(id,amount)` and `quoteSell(id,amount)`, both
@@ -278,7 +325,7 @@ Serialize bigint values as decimal strings at JSON boundaries.
 
 ## Networks And Trust
 
-The bundled testnet manifest identifies the Gen10 auction graph on chain 99801. The mainnet
+The bundled testnet manifest identifies the Gen10 auction graph and its launch contracts on chain 99801. The mainnet
 template intentionally fails validation until actual mainnet values are supplied. Mainnet
 requires USDC and a fresh contract graph bound to that token; changing an SDK address cannot
 change an immutable deployed binding. There is no fallback between networks.
@@ -317,7 +364,8 @@ ANVIL_BIN=/path/to/anvil npm run test:evm
 npm run test:live
 npm run test:live:auctions  # the full Gen10 graph, bid-fee quote, optional auction and wallet limits
 npm run test:live:markets   # live market, fee batches, terms and the surcharge mirror
-npm run test:live:launch    # launch floor rules against the live adapter
+npm run test:live:launch    # launch floor rules against the live adapter; the launch client against the live launch graph
+npm run test:live:abis      # every published compiler ABI against the code deployed on chain
 # Regenerate src/testnet-deployment.ts after changing deployments/elysium-testnet.json:
 npm run embed
 ```

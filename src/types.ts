@@ -4,9 +4,24 @@ import type { BID_RULES } from "./bid-rules.js";
 export type RpcClient = Pick<PublicClient, "getChainId" | "getBlock" | "getCode" | "readContract" | "getLogs" | "call" | "estimateGas">;
 export interface ContractPin { readonly address: Address; readonly runtimeCodeHash: Hex }
 /**
+ * What the launch client pins beyond the auction graph: the creator account factory (creator accounts are deployed by it, so the account itself has no pin), the
+ * entry controller and the bond escrow, and the two costs of a launch. Both are verified against the chain by the launch client's `verifyDeployment`.
+ */
+export interface LaunchBindings {
+  readonly creatorAccountFactory: ContractPin;
+  /** Pauses new launches (`entriesPaused`). */
+  readonly entryController: ContractPin;
+  /** Holds the creator's native operating bond and repays the gas of settlement operations from it. */
+  readonly bondEscrow: ContractPin;
+  /** The controller's `launchFee()` in quote-token base units (1.5 USDC: 1500000). */
+  readonly launchFeeBaseUnits: string;
+  /** The native value a launch carries as the creator's operating bond, in wei (0.5 HYPE; the bond escrow's `CREATOR_DEPOSIT`). */
+  readonly deployerBondWei: string;
+}
+/**
  * The reviewed deployment manifest: every contract the clients read, pinned by address and runtime code hash. The curve and the Dynamic Bids hook
- * enforce the terms registry, the controller caps the launch floor and requires a 30,000 USDC net minimum raise, and `bidRules` are the exact
- * compiled per-wallet bid rules (all verified against the chain by `verifyDeployment`).
+ * enforce the terms registry, the controller caps the launch floor and requires a 30,000 USDC net minimum raise, `launchBindings` pin the launch
+ * contracts, and `bidRules` are the exact compiled per-wallet bid rules (all verified against the chain by `verifyDeployment`).
  */
 export interface Deployment {
   readonly schemaVersion: 1;
@@ -28,6 +43,7 @@ export interface Deployment {
     readonly bidHook: ContractPin;
     readonly exposureHelper: ContractPin;
   };
+  readonly launchBindings: LaunchBindings;
   /** The exact compiled bid rules; any other value is refused. */
   readonly bidRules: typeof BID_RULES;
   /** Informational release status, e.g. "live"; runtime pins remain authoritative. */

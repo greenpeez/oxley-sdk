@@ -4,6 +4,7 @@ interface ManifestsModule {
   MANIFEST: ManifestEntry;
   validateManifest(manifest: unknown, entry?: ManifestEntry): void;
   mapProductionManifest(production: unknown, entry?: ManifestEntry): Record<string, unknown>;
+  LAUNCH_COSTS: { launchFeeBaseUnits: string; deployerBondWei: string };
 }
 // A computed specifier keeps TypeScript from asking for declarations of the .mjs file.
 export const scripts = await import(new URL("../../scripts/deployment-manifests.mjs", import.meta.url).href) as ManifestsModule;

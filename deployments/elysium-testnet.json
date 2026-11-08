@@ -43,6 +43,22 @@
       "runtimeCodeHash": "0x25c44ad1d696a4875c964b2def4ff550bd46936f97eff22d102ca69d9a6db32f"
     }
   },
+  "launchBindings": {
+    "creatorAccountFactory": {
+      "address": "0x343ce625f9930648ccebe503bd274606b376d98c",
+      "runtimeCodeHash": "0x0a8d99284f40b370a1e317ef6dcbff0cec1278da045cce97af2d14f997097d6c"
+    },
+    "entryController": {
+      "address": "0x52f5728513ce57184713b109e0119f5b6455f47b",
+      "runtimeCodeHash": "0x3aade113b66884cd6290b0f648c2b00bb211444e178a9279d712ecb9d8b1831d"
+    },
+    "bondEscrow": {
+      "address": "0x70032f2faee1a6d25cf191b513f0dc9adf8928cb",
+      "runtimeCodeHash": "0x360f7cc1ecd3c26207e8bad87383c52ed01610cffca9c636db4f2f5b22fabca4"
+    },
+    "launchFeeBaseUnits": "1500000",
+    "deployerBondWei": "500000000000000000"
+  },
   "bidRules": {
     "version": "8",
     "minBid": "20000000",

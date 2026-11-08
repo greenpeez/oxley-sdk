@@ -13,14 +13,14 @@ Public links: [GitHub](https://github.com/greenpeez/oxley-sdk),
 | Material | Included location |
 | --- | --- |
 | Installable JavaScript and TypeScript types | `@oxley/sdk` |
-| Full compiler ABI JSON: curve, bid router, bid hook, terms registry, CCA | `abis/`, see [auction guide](auctions.md) |
+| Full compiler ABI JSON of every Oxley contract the SDK touches, and the vendor CCA | `abis/`, see [auction guide](auctions.md) and [validation](validation.md) |
 | Minimal Solidity integration interface | `docs/IOxleyCurve.sol` |
 | Network, token, addresses and runtime pins | `deployments/elysium-testnet.json` |
 | Quotes, swaps, terms, trading gate, opening surcharge | [markets](markets.md), `examples/quote-and-swap.ts` |
 | Fee-bearing swaps for wallets and apps (EIP-5792 batch) | [integrator fees](integrator-fees.md), `examples/integrator-fee.ts` |
 | 0x optional source action and exact offsets | [0x guide](0x.md), `@oxley/sdk/0x`, `examples/zero-ex.ts` |
 | Unsigned Dynamic Bid, rebid, exit and claim helpers | `@oxley/sdk/auctions`, `examples/auction.ts`, `examples/dynamic-bid.ts` |
-| Launch-floor rules | `@oxley/sdk/launch`, [launch](launch.md), `examples/launch-floor.ts` |
+| Unsigned, simulated launch steps and the launch-floor rules | `@oxley/sdk/launch`, [launch](launch.md), `examples/launch.ts`, `examples/launch-floor.ts` |
 | Public indexed auctions, bids, trades, volume and candles | `@oxley/sdk/data`, [data API](data-api.md), `examples/live-data.ts` |
 | Runtime and settlement test evidence | [validation](validation.md) |
 | Mainnet profile template and ownership | `deployments/mainnet.template.json`, [mainnet](mainnet.md) |
@@ -114,5 +114,5 @@ unsigned; providers retain signing and submission. An executor submitting a bid 
 owner, unlike swaps where a provider can forward an immediately received output. See [auction
 integration](auctions.md) before composing a bid through a shared executor. This is not an
 instant-settlement DEX route and does not introduce custody, deposit or withdrawal services.
-Launching an auction is done in the Oxley app; `@oxley/sdk/launch` only checks launch floors
-([launch](launch.md)).
+Launching an auction is prepared by `@oxley/sdk/launch` as unsigned, simulated steps ([launch](launch.md)); the creator pays the
+launch fee in USDC and, in native HYPE, the launch's 0.5 operating bond and gas.

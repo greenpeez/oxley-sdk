@@ -10,14 +10,15 @@ wallet. Amounts are USDC base units (six decimals; Oxy-USDC on testnet).
 
 | Role | Typed ABI | Full compiler ABI JSON |
 | --- | --- | --- |
-| Launch controller | `auctionControllerAbi` | typed subset only |
+| Launch controller | `auctionControllerAbi`, `launchControllerAbi` | `@oxley/sdk/abis/auction-controller.json` |
 | Accepted-bid router | `auctionBidRouterAbi` | `@oxley/sdk/abis/bid-router.json` |
 | Per-wallet bid hook | `bidHookAbi` | `@oxley/sdk/abis/bid-hook.json` |
-| Auction resolver (adapter) | `auctionAdapterAbi` | typed subset only |
+| Auction resolver (adapter) | `auctionAdapterAbi`, `launchFloorAbi` | `@oxley/sdk/abis/adapter.json` |
 | Per-auction CCA | `ccaAuctionAbi`, `ccaCheckpointAbi` | `@oxley/sdk/abis/cca-auction.json` |
 
-Typed ABIs are integration subsets (from `/auctions` and `/abis`); the JSON files are the
-complete compiler ABIs, including events and errors. The controller creates and settles
+Typed ABIs are integration subsets (from `/auctions` and `/abis`), each tested against its JSON file; the JSON files are the
+complete compiler ABIs of the deployed build, including events and errors (the registry, creator account, creator account factory, bond escrow, entry controller and
+exposure helper are there too: see [launch](launch.md) and [validation](validation.md)). The controller creates and settles
 auctions but has no bid, claim or refund entrypoint. Bids go through the router, which
 charges the accepted-bid fee; never call the raw CCA `submitBid` overloads, the bid hook
 rejects bypasses.
@@ -250,6 +251,6 @@ client by default. Every auction transaction has `value: 0n`.
 Use a reviewed manifest with real USDC and the full set of pins. `mainnet.template.json` is
 deliberately non-executable; final addresses, bytecode, bindings and on-chain behavior must
 be verified on the actual mainnet release. See [mainnet inputs](mainnet.md). Trading the
-resulting markets is in [markets](markets.md); the pure launch-floor rules are in
+resulting markets is in [markets](markets.md); launching an auction, and the launch-floor rules, are in
 [launch](launch.md). Examples: [auction.ts](../examples/auction.ts),
-[dynamic-bid.ts](../examples/dynamic-bid.ts).
+[dynamic-bid.ts](../examples/dynamic-bid.ts), [launch.ts](../examples/launch.ts).

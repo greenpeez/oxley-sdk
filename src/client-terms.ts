@@ -1,7 +1,7 @@
 import { encodeFunctionData, type Address, type Hex } from "viem";
 import { termsRegistryAbi } from "./curve-abis.js";
 import { address, check, hash, OxleyError, uint } from "./validation.js";
-import type { Anchor, Transaction } from "./types.js";
+import type { Anchor, RpcClient, Transaction } from "./types.js";
 import type { ClientContext } from "./client-context.js";
 
 /** The caller's standing in the terms registry bound to the curve. While the registry's `requiredVersion` is zero nothing is enforced. */
@@ -30,26 +30,29 @@ export function buildAcceptTerms(input: { chainId: number; termsRegistry: Addres
   }) };
 }
 
+/** The standing of `account` in `registry` at the block of `anchor`, with the registry's own consistency rules checked. Shared by the trading client and the launch client. */
+export async function readTermsStatus(rpc: RpcClient, registry: Address, account: Address, anchor: Anchor): Promise<TermsStatus> {
+  address(account);
+  const at = { address: registry, abi: termsRegistryAbi, blockNumber: anchor.blockNumber } as const;
+  const [requiredVersion, latestVersion, acceptedVersion, accepted] = await Promise.all([
+    rpc.readContract({ ...at, functionName: "requiredVersion" }), rpc.readContract({ ...at, functionName: "latestVersion" }),
+    rpc.readContract({ ...at, functionName: "acceptedVersion", args: [account] }),
+    rpc.readContract({ ...at, functionName: "hasAccepted", args: [account] }),
+  ]);
+  // Mirrors the registry's own rule; any disagreement means an unexpected registry, so fail closed.
+  check(requiredVersion <= latestVersion && accepted === (requiredVersion === 0n || acceptedVersion >= requiredVersion),
+    "INVALID_TERMS_STATE", "Terms registry views are inconsistent");
+  const published = requiredVersion > 0n
+    ? await rpc.readContract({ ...at, functionName: "terms", args: [requiredVersion] }) : undefined;
+  check(published === undefined || published.termsHash !== `0x${"0".repeat(64)}`, "INVALID_TERMS_STATE", "Required terms are not published");
+  return Object.freeze({ ...anchor, account, termsRegistry: registry, enforced: requiredVersion > 0n, requiredVersion,
+    latestVersion, acceptedVersion, accepted, termsHash: published?.termsHash ?? null, uri: published?.uri ?? null });
+}
+
 export function createTermsReader(context: ClientContext) {
   const { rpc, deployment, snapshot, assertCanonical, ensureVerified } = context;
   const registry = deployment.termsRegistry.address;
-  async function termsAt(account: Address, anchor: Anchor): Promise<TermsStatus> {
-    address(account);
-    const at = { address: registry, abi: termsRegistryAbi, blockNumber: anchor.blockNumber } as const;
-    const [requiredVersion, latestVersion, acceptedVersion, accepted] = await Promise.all([
-      rpc.readContract({ ...at, functionName: "requiredVersion" }), rpc.readContract({ ...at, functionName: "latestVersion" }),
-      rpc.readContract({ ...at, functionName: "acceptedVersion", args: [account] }),
-      rpc.readContract({ ...at, functionName: "hasAccepted", args: [account] }),
-    ]);
-    // Mirrors the registry's own rule; any disagreement means an unexpected registry, so fail closed.
-    check(requiredVersion <= latestVersion && accepted === (requiredVersion === 0n || acceptedVersion >= requiredVersion),
-      "INVALID_TERMS_STATE", "Terms registry views are inconsistent");
-    const published = requiredVersion > 0n
-      ? await rpc.readContract({ ...at, functionName: "terms", args: [requiredVersion] }) : undefined;
-    check(published === undefined || published.termsHash !== `0x${"0".repeat(64)}`, "INVALID_TERMS_STATE", "Required terms are not published");
-    return Object.freeze({ ...anchor, account, termsRegistry: registry, enforced: requiredVersion > 0n, requiredVersion,
-      latestVersion, acceptedVersion, accepted, termsHash: published?.termsHash ?? null, uri: published?.uri ?? null });
-  }
+  const termsAt = (account: Address, anchor: Anchor): Promise<TermsStatus> => readTermsStatus(rpc, registry, account, anchor);
   async function getTermsStatus(account: Address, blockNumber?: bigint): Promise<TermsStatus> {
     const anchor = await snapshot(blockNumber);
     await ensureVerified(anchor);

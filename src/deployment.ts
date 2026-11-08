@@ -1,6 +1,6 @@
 import { BID_RULES } from "./bid-rules.js";
 import { address, check, hash, sameAddress } from "./validation.js";
-import type { ContractPin, Deployment } from "./types.js";
+import type { ContractPin, Deployment, LaunchBindings } from "./types.js";
 
 const TESTNET_QUOTE_TOKEN = "0xa4ce6e6c719f7fb524230c367948039b078683e4";
 function deploymentHeader(input: unknown): Deployment {
@@ -23,6 +23,20 @@ function bidRules(rules: unknown): typeof BID_RULES {
   return rules as typeof BID_RULES;
 }
 const freezePin = <T extends ContractPin>(pin: T): T => Object.freeze({ ...pin });
+/** The bond is the bond escrow's `CREATOR_DEPOSIT` and the controller refuses any other `msg.value`: a constant of the contracts, like the bid rules. */
+const DEPLOYER_BOND_WEI = "500000000000000000";
+function launchBindings(input: unknown): LaunchBindings {
+  const launch = input as LaunchBindings | undefined;
+  check(!!launch && typeof launch === "object", "LAUNCH_BINDINGS_REQUIRED", "Reviewed launch bindings are required");
+  for (const pin of [launch.creatorAccountFactory, launch.entryController, launch.bondEscrow]) {
+    check(!!pin && typeof pin === "object", "LAUNCH_BINDINGS_REQUIRED", "Missing launch contract pin");
+    address(pin.address); hash(pin.runtimeCodeHash);
+  }
+  check(typeof launch.launchFeeBaseUnits === "string" && /^[1-9][0-9]*$/.test(launch.launchFeeBaseUnits) && BigInt(launch.launchFeeBaseUnits) < 1n << 256n,
+    "INVALID_LAUNCH_COST", "An explicit positive launch fee in quote-token base units is required");
+  check(launch.deployerBondWei === DEPLOYER_BOND_WEI, "INVALID_BOND", "The launch controller requires the creator's 0.5 native-asset operating bond");
+  return launch;
+}
 
 /** Validates and freezes a deployment manifest. Offline: runtime code and bindings are verified against a chain by the clients' `verifyDeployment`. */
 export function parseDeployment(input: unknown): Deployment {
@@ -35,17 +49,21 @@ export function parseDeployment(input: unknown): Deployment {
     address(pin.address); hash(pin.runtimeCodeHash);
   }
   address(d.auctionController);
+  const launch = launchBindings(d.launchBindings);
   check(d.quoteToken.decimals === 6 && d.quoteToken.symbol === (d.network === "mainnet" ? "USDC" : "Oxy-USDC"),
     "INVALID_QUOTE_ASSET", "Mainnet requires USDC; testnet requires Oxy-USDC, both with six decimals");
   check(d.network !== "mainnet" || (d.chainId !== 99801 && !sameAddress(d.quoteToken.address, TESTNET_QUOTE_TOKEN)),
     "TESTNET_ON_MAINNET", "Testnet bindings cannot be used on mainnet");
-  const addresses = [d.auctionController, ...pins.map(pin => pin.address)];
+  const launchPins = [launch.creatorAccountFactory, launch.entryController, launch.bondEscrow];
+  const addresses = [d.auctionController, ...pins.map(pin => pin.address), ...launchPins.map(pin => pin.address)];
   check(new Set(addresses.map(a => a.toLowerCase())).size === addresses.length,
-    "INVALID_DEPLOYMENT", "Curve, registry, quote token, terms registry, controller and auction contracts must be distinct");
+    "INVALID_DEPLOYMENT", "Curve, registry, quote token, terms registry, controller, auction and launch contracts must be distinct");
   const rules = bidRules(d.bidRules);
   return Object.freeze({ ...d, curve: freezePin(d.curve), registry: freezePin(d.registry), quoteToken: freezePin(d.quoteToken),
     termsRegistry: freezePin(d.termsRegistry),
     auctionBindings: Object.freeze({ ...bindings, bidRouter: freezePin(bindings.bidRouter), adapter: freezePin(bindings.adapter),
       bidHook: freezePin(bindings.bidHook), exposureHelper: freezePin(bindings.exposureHelper) }),
+    launchBindings: Object.freeze({ ...launch, creatorAccountFactory: freezePin(launch.creatorAccountFactory), entryController: freezePin(launch.entryController),
+      bondEscrow: freezePin(launch.bondEscrow) }),
     bidRules: Object.freeze({ ...rules }) });
 }

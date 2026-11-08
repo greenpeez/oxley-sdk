@@ -1,5 +1,78 @@
 # Changelog
 
+## 0.7.0-next.1 - 2026-11-08
+
+Adds the Gen10 launch client and the full compiler ABIs of every Gen10 contract the SDK touches, and corrects the curve ABI, which was an earlier build's. Still Gen10 only.
+No contract is deployed and no transaction is broadcast by this change. **Breaking for hand-written manifests:** `parseDeployment` now requires `launchBindings`.
+
+### Added
+
+- **Launch client.** `createOxleyLaunchClient({ publicClient, deployment })` from `@oxley/sdk/launch` prepares a Gen10 launch as unsigned, simulated transactions, one step
+  at a time: `prepareLaunch(input)` returns the next of `terms` (only while the terms registry enforces acceptance), `setup` (factory `createAccountForDraft`), `reset` and
+  `approve` (the 1.5 USDC launch fee, approved **to the creator account**), and `launch` (`launchAuctionWithCommitmentAndExactDuration` on the creator account), then
+  `complete` with the launch read back; `getLaunch({ owner, draftSalt, beneficiary? })` reads it back at any time (creator account, coin, auction, end block, exact-duration
+  schedule, bond held and refundable); `verifyDeployment()` verifies the whole launch graph. Each preparation verifies the auction graph and the launch pins at one block (code
+  hash of the factory, entry controller and bond escrow; their bindings; `launchFee()` and `CREATOR_DEPOSIT()` against the manifest; the controller's 14,400 to 72,000 blocks an hour),
+  applies `validateLaunchFloor` before any read, checks ticker, deal id, effective floor, terms standing, balances and nonce, and simulates the step from the owner and estimates its gas.
+  Failures are `OxleyError` codes: `SIMULATION_FAILED` (with `details.stage` and the decoded `details.revert`; an RPC URL is never in the message), `INSUFFICIENT_QUOTE`,
+  `INSUFFICIENT_BOND`, `INSUFFICIENT_GAS`, `GAS_PRICE_TOO_HIGH`, `TICKER_UNAVAILABLE`, `DEAL_ID_USED`, `LAUNCH_PAUSED`, `LAUNCH_BINDING_MISMATCH`, `LAUNCH_COST_MISMATCH`,
+  `DURATION_BOUNDS_MISMATCH`, `CREATOR_BINDING_MISMATCH` and the rest listed in [docs/launch.md](docs/launch.md).
+- **Native value, as the contracts implement it.** Only the `launch` step carries value: exactly the 0.5 HYPE operating bond (`deployerBondWei`), which the controller requires and the
+  bond escrow holds for the auction's delivery and refund gas; the owner also pays the gas of every step, and the launch step is refused above the 1 gwei the escrow accepts and carries the
+  `gasPrice` it was simulated at. The launch fee and everything else is USDC (Oxy-USDC on testnet). There is no sponsorship, no USDC-to-HYPE conversion and no HYPE fee, bid or trade option.
+- **Offline builders and helpers** from `@oxley/sdk/launch`: `buildCreatorAccount`, `buildLaunchApprovals`, `buildAuctionLaunch` (returns the bond as `value`), `launchDealId` (the
+  controller's `dealIdFor`, checked against the controller on every preparation), `newDraftSalt`, `validateAuctionLaunch`, and the exact-duration helpers `auctionDurationBounds`,
+  `auctionDurationBlocks`, `sampleSecondsPerBlock`, `AUCTION_MIN_BLOCKS_PER_HOUR` (14,400), `AUCTION_MAX_BLOCKS_PER_HOUR` (72,000) and `BLOCK_RATE_SAMPLE_BLOCKS`; `buildAcceptTerms` is re-exported.
+  Types: `AuctionLaunchInput`, `LaunchStage`, `LaunchTransaction`, `LaunchRpcClient`, `LaunchIdentity`, `LaunchState`, `OxleyLaunchClient`.
+- **Manifest `launchBindings`:** the creator account factory, entry controller and bond escrow (address and runtime code hash), `launchFeeBaseUnits` (`"1500000"`) and `deployerBondWei`
+  (`"500000000000000000"`). `deployments/elysium-testnet.json` has them from the live record; `deployments/mainnet.template.json` has placeholders (the bond, a constant of the contracts, is filled in).
+  `parseDeployment` validates them (`LAUNCH_BINDINGS_REQUIRED`, `INVALID_LAUNCH_COST`, `INVALID_BOND`) and requires twelve distinct addresses. The importer maps them from the record.
+- **Full compiler ABIs** under `@oxley/sdk/abis/`: `auction-controller.json`, `adapter.json`, `registry.json`, `exposure-helper.json`, `creator-account.json`, `creator-account-factory.json`,
+  `bond-escrow.json` and `entry-controller.json`. With the curve, bid router, bid hook, terms registry and CCA that is every Oxley contract in the manifest except the Oxy-USDC token, which
+  is not an Oxley build. The typed ABI subsets that mirror them are now tested against them (the controller, adapter and registry subsets had no compiled check before):
+  `auctionControllerAbi`, `launchFloorCapAbi`, `launchMinimumRaiseAbi`, `launchControllerAbi`, `auctionAdapterAbi`, `launchFloorAbi`, `registryAbi`, `creatorAccountFactoryAbi`,
+  `creatorAccountAbi`, `launchEntryAbi` and `launchBondAbi` (the last five are new exports of `@oxley/sdk/launch` and `@oxley/sdk/abis`).
+- **Proof that the ABIs are the deployed build's.** `docs/live-artifacts.json` now records the compiler job the deployment record names (`compiledGraphSha256` `2b7ad321...`, solc 0.8.26, Cancun,
+  optimizer 200, no metadata hash), the source commit, and per contract the ABI hash, the build's creation-code and runtime-template keccak256, the immutable slots and the pinned runtime hash.
+  The importer refuses an ABI unless the compiled graph hashes to the record's identity, all 109 of its sources are unchanged, and the forge artifact reproduces the graph's creation code,
+  runtime template, ABI and immutable slots. `npm run test:live:abis` (`scripts/check-abis-testnet.ts`) compares live chain code with the templates: with the immutable slots zeroed, all eleven
+  pinned contracts and a creator account created by the factory hash to the published build, and the pinned contracts hash to the manifest's pins unmasked. Run against Elysium testnet at block
+  26,268,297: 12 of 12 match. The exposure helper and the entry controller have no immutables, so their templates equal their pins with no chain read.
+- **Revert decoding** names the launch rules (`TickerUnavailable`, `InvalidTicker`, `ReservedTicker`, `InvalidListingCommitment`, `InvalidDurationBlocks`, `InvalidRequestedHours`,
+  `FixtureLaunchOnly`, `NewEntriesPaused`, `GasPriceTooHigh`, `NeedsFunding`) and the curve's `TradeMoveLimit`.
+- `test:live:launch` also verifies the launch graph live, checks the controller's `LAUNCH_NAMESPACE` and `dealIdFor` against `launchDealId`, and prepares a launch for an unfunded wallet, which must
+  be refused with `INSUFFICIENT_QUOTE` after every chain read has succeeded (`OXLEY_LAUNCH_OWNER` and `OXLEY_LAUNCH_SALT` read back an existing launch).
+
+### Fixed
+
+- **`abis/curve.json` and `curveAbi.market` were the Gen8 build's.** The deployed Gen10 curve (the Gen9 launch-scaled curve) returns `priceScaleWad` between `priceOffsetWad` and `curveInventory` in
+  `market()` and has a `TradeMoveLimit()` error; the shipped ABI had neither. The SDK only read the four leading fields of `market()` (`coin`, `creator`, `activatedAt`, `active`), which sit before the
+  difference, so no quote or swap was affected, but a caller decoding the rest with the SDK's ABI got `curveInventory` and `curveCapital` shifted by one. The router, hook and terms registry ABIs were
+  already identical to the Gen10 build; the curve is the only file that changed.
+
+### Changed
+
+- `parseDeployment` requires `launchBindings` (see above), so a manifest written for `0.7.0-next.0` must add them. The bundled manifest and its embedded export have them.
+- The terms-status read is shared: `readTermsStatus` in `client-terms.ts` serves the trading client's `getTermsStatus` and the launch client's `terms` step.
+- `scripts/check-package.mjs` asserts the new value exports of `@oxley/sdk/launch` and `@oxley/sdk/abis`, the eight new ABI files and exports, a launch smoke test on the bundled manifest, and a typed
+  consumer of the launch client; `creator-account` is no longer a forbidden file name in the archive.
+- `docs/live-artifacts.json` replaces the earlier router/hook provenance (an uncommitted working tree at commit `3224cc13`) with the Gen10 compiled-graph provenance above.
+
+### Tests
+
+- 138 unit and ABI tests in 19 files pass (120 before): 16 new launch tests (pins and bindings by code hash, cost and duration-bound mismatches, each step's calldata against the compiled ABIs,
+  the stage sequence, native value and gas, simulation failures and URL redaction, every pre-check, the block-rate sampler, the read-back, the manifest), one extra ABI/evidence test, and the launch reverts.
+  Mutating the launch code (dropping the bond value, a pin check, the floor rules, the gas cap, the simulation caller or the failure handling, swapping arguments, the old 36,000 ceiling) fails these tests.
+  `typecheck`, `build` and `test:package` pass; `test:live:abis` passes and `test:live:launch` passes against Elysium testnet (read-only). The local EVM suite (`npm run test:evm`) needs Anvil, which was not
+  available on the build machine, and was not run.
+
+### Not covered
+
+- No launch transaction has been sent by this client: the approval and launch steps are simulated against a modelled launch graph, and live only through the read-only checks above (a real creator address
+  prepared the `setup` step against the live factory). A funded end-to-end launch on testnet is the next check.
+- Scheduled launches (`scheduleAuctionLaunch`), the unused-bond claim, creator fee claims, handover and metadata publication are not prepared; their ABI is `abis/creator-account.json`.
+- That the compiler reproduces the artifacts from the sources on another machine is not proved here; the worktree's own forge build reproduced all twelve hashes, and the chain matches them.
+
 ## 0.7.0-next.0 - 2026-11-08
 
 **Breaking.** The SDK now supports only Gen10, the contract release live on Elysium (testnet chain id 99801; mainnet will launch

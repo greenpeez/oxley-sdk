@@ -379,6 +379,11 @@
             "internalType": "uint256"
           },
           {
+            "name": "priceScaleWad",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
             "name": "curveInventory",
             "type": "uint256",
             "internalType": "uint256"
@@ -1428,6 +1433,11 @@
         "internalType": "address"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "TradeMoveLimit",
+    "inputs": []
   },
   {
     "type": "error",

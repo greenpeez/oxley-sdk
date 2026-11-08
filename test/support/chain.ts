@@ -12,7 +12,7 @@ export const pin = (n: number) => ({ address: addr(n), runtimeCodeHash: keccak25
 export const full = (name: string) => JSON.parse(readFileSync(new URL(`../../abis/${name}.json`, import.meta.url), "utf8")) as Abi;
 export const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 
-/** The synthetic deployment's addresses: curve 21, registry 22, quote token 3, controller 24, terms registry 25, router 26, adapter 27, hook 28, exposure helper 29. */
+/** The synthetic deployment's addresses: curve 21, registry 22, quote token 3, controller 24, terms registry 25, router 26, adapter 27, hook 28, exposure helper 29, creator account factory 40, entry controller 41, bond escrow 42. */
 export const BASE = 20;
 /** Synthetic manifest with the shape of the reviewed one; every pin carries the RPC double's runtime hash. */
 export function manifest(extra: Record<string, unknown> = {}) {
@@ -20,6 +20,7 @@ export function manifest(extra: Record<string, unknown> = {}) {
     curve: pin(BASE + 1), registry: pin(BASE + 2), quoteToken: { ...pin(3), decimals: 6 as const, symbol: "Oxy-USDC" as const }, auctionController: addr(BASE + 4),
     termsRegistry: pin(BASE + 5),
     auctionBindings: { controllerRuntimeCodeHash: keccak256(runtime), bidRouter: pin(BASE + 6), adapter: pin(BASE + 7), bidHook: pin(BASE + 8), exposureHelper: pin(BASE + 9) },
+    launchBindings: { creatorAccountFactory: pin(40), entryController: pin(41), bondEscrow: pin(42), launchFeeBaseUnits: "1500000", deployerBondWei: "500000000000000000" },
     bidRules: { ...BID_RULES }, ...extra };
 }
 /**

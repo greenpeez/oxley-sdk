@@ -1,7 +1,7 @@
 {
   "name": "@oxley/sdk",
-  "version": "0.7.0-next.0",
-  "description": "Oxley Gen10 auctions on Elysium: market data, quotes, swaps (with optional integrator fees), terms, Dynamic Bids and rebids, and claim and refund transactions, as unsigned calldata for apps, bots and AI agents",
+  "version": "0.7.0-next.1",
+  "description": "Oxley Gen10 auctions on Elysium: launches, market data, quotes, swaps (with optional integrator fees), terms, Dynamic Bids and rebids, and claim and refund transactions, as unsigned calldata for apps, bots and AI agents",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -12,7 +12,7 @@
   "bugs": {
     "url": "https://github.com/greenpeez/oxley-sdk/issues"
   },
-  "keywords": ["oxley", "elysium", "usdc", "auctions", "dynamic-bids", "ai-agents", "dex", "aggregator", "0x"],
+  "keywords": ["oxley", "elysium", "usdc", "auctions", "launch", "dynamic-bids", "ai-agents", "dex", "aggregator", "0x"],
   "packageManager": "pnpm@10.32.1",
   "sideEffects": false,
   "engines": {
@@ -48,6 +48,14 @@
     "./abis/bid-hook.json": "./abis/bid-hook.json",
     "./abis/terms-registry.json": "./abis/terms-registry.json",
     "./abis/cca-auction.json": "./abis/cca-auction.json",
+    "./abis/auction-controller.json": "./abis/auction-controller.json",
+    "./abis/adapter.json": "./abis/adapter.json",
+    "./abis/registry.json": "./abis/registry.json",
+    "./abis/exposure-helper.json": "./abis/exposure-helper.json",
+    "./abis/creator-account.json": "./abis/creator-account.json",
+    "./abis/creator-account-factory.json": "./abis/creator-account-factory.json",
+    "./abis/bond-escrow.json": "./abis/bond-escrow.json",
+    "./abis/entry-controller.json": "./abis/entry-controller.json",
     "./deployments/elysium-testnet.json": "./deployments/elysium-testnet.json",
     "./deployments/mainnet.template.json": "./deployments/mainnet.template.json"
   },
@@ -75,6 +83,7 @@
     "test:live": "node --import tsx scripts/check-testnet.ts",
     "test:live:auctions": "node --import tsx scripts/check-auctions-testnet.ts",
     "test:live:launch": "node --import tsx scripts/check-launch-testnet.ts",
+    "test:live:abis": "node --import tsx scripts/check-abis-testnet.ts",
     "test:live:markets": "node --import tsx scripts/check-markets-testnet.ts",
     "embed": "node scripts/embed-deployments.mjs",
     "prepack": "npm run build"

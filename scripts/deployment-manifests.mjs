@@ -13,6 +13,12 @@ export function validateManifest(manifest, entry = MANIFEST) {
 
 const pin = role => ({ address: role.address, runtimeCodeHash: role.runtimeCodeHash });
 /**
+ * The two launch costs the production record does not carry: the launch fee is the controller's constructor argument (1.5 USDC, scripts/elysium/gen8/local-graph.mjs
+ * in the contracts worktree) and the bond is the bond escrow's `CREATOR_DEPOSIT` constant (0.5 HYPE, which the creator account forwards as `msg.value`). The launch
+ * client verifies both against the chain, so a wrong figure here fails verification instead of mispricing a launch.
+ */
+export const LAUNCH_COSTS = Object.freeze({ launchFeeBaseUnits: "1500000", deployerBondWei: "500000000000000000" });
+/**
  * The production schema-3 record (addresses already lower-cased) mapped to the SDK's deployment shape; only the roles the SDK reads are
  * pinned. The key order is the order of the bundled manifest.
  */
@@ -23,7 +29,9 @@ export function mapProductionManifest(production, entry = MANIFEST) {
     network: "testnet", startBlock: production.startBlock, curve: pin(roles.curve), registry: pin(roles.registry),
     quoteToken: { ...pin(roles.quoteToken), symbol: "Oxy-USDC", decimals: 6 }, auctionController: roles.controller.address,
     termsRegistry: pin(roles.termsRegistry), auctionBindings: { controllerRuntimeCodeHash: roles.controller.runtimeCodeHash, bidRouter: pin(roles.bidRouter),
-      adapter: pin(roles.adapter), bidHook: pin(roles.bidHook), exposureHelper: pin(roles.exposureHelper) }, bidRules: production.bidRules };
+      adapter: pin(roles.adapter), bidHook: pin(roles.bidHook), exposureHelper: pin(roles.exposureHelper) },
+    launchBindings: { creatorAccountFactory: pin(roles.creatorAccountFactory), entryController: pin(roles.entryController), bondEscrow: pin(roles.bondEscrow), ...LAUNCH_COSTS },
+    bidRules: production.bidRules };
   validateManifest(manifest, entry);
   return manifest;
 }
