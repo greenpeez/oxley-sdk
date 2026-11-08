@@ -21,6 +21,7 @@ Public links: [GitHub](https://github.com/greenpeez/oxley-sdk),
 | 0x optional source action and exact offsets | [0x guide](0x.md), `@oxley/sdk/0x`, `examples/zero-ex.ts` |
 | Unsigned Dynamic Bid, rebid, exit and claim helpers | `@oxley/sdk/auctions`, `examples/auction.ts`, `examples/dynamic-bid.ts` |
 | Unsigned, simulated launch steps and the launch-floor rules | `@oxley/sdk/launch`, [launch](launch.md), `examples/launch.ts`, `examples/launch-floor.ts` |
+| Scheduled launches, the unused bond, creator fees, and the creator's signed token details and image | `@oxley/sdk/launch`, `@oxley/sdk/metadata`, [creator](creator.md), `examples/scheduled-launch.ts`, `examples/creator.ts`, `examples/token-metadata.ts` |
 | Public indexed auctions, bids, trades, volume and candles | `@oxley/sdk/data`, [data API](data-api.md), `examples/live-data.ts` |
 | Runtime and settlement test evidence | [validation](validation.md) |
 | Mainnet profile template and ownership | `deployments/mainnet.template.json`, [mainnet](mainnet.md) |
@@ -115,4 +116,5 @@ owner, unlike swaps where a provider can forward an immediately received output.
 integration](auctions.md) before composing a bid through a shared executor. This is not an
 instant-settlement DEX route and does not introduce custody, deposit or withdrawal services.
 Launching an auction is prepared by `@oxley/sdk/launch` as unsigned, simulated steps ([launch](launch.md)); the creator pays the
-launch fee in USDC and, in native HYPE, the launch's 0.5 operating bond and gas.
+launch fee in USDC and, in native HYPE, the launch's 0.5 operating bond and gas. A scheduled launch takes the same fee and bond when it is scheduled, and anyone (an aggregator's
+executor included) may execute it from its start or refund it after its window ([creator](creator.md)).

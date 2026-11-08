@@ -28,6 +28,7 @@ export const launchMinimumRaiseAbi = parseAbi([
 /** Accepted-bid router: Dynamic Bids and one-transaction rebids; `data` is `abi.encode(BidWitness[])`. */
 export const auctionBidRouterAbi = parseAbi([
   "function quoteAsset() view returns (address)",
+  "function feeRouter() view returns (address)",
   "function adapter() view returns (address)",
   "function validationHook() view returns (address)",
   "function quoteBid(uint128 entered) view returns (uint128 principal,uint256 debit,uint256 fee)",
@@ -116,4 +117,5 @@ export const oxleyRevertAbi = parseAbi([
   "error TickerUnavailable(string symbol)", "error InvalidTicker()", "error ReservedTicker(bytes32 canonicalKey)", "error InvalidListingCommitment()",
   "error InvalidDurationBlocks(uint32 durationBlocks,uint32 minimumBlocks,uint32 maximumBlocks)", "error InvalidRequestedHours(uint8 requestedHours)",
   "error FixtureLaunchOnly()", "error NewEntriesPaused()", "error GasPriceTooHigh()", "error NeedsFunding(uint256 balance,uint256 required)",
+  "error ScheduledLaunchRefused(bytes reason)", "error ScheduledLaunchTooExpensive(uint256 gasUsed)", "error NotLaunched()", "error FeesLocked()",
 ]);

@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { decodeFunctionData, encodeAbiParameters, encodeErrorResult, keccak256, toHex, type Hex } from "viem";
 import { OxleyError, tokenAbi, parseDeployment } from "../src/index.js";
+import { parseLaunchDeployment } from "../src/launch.js";
 import { oxleyRevertAbi } from "../src/abis.js";
 import { auctionDurationBlocks, auctionDurationBounds, buildAuctionLaunch, buildCreatorAccount, buildLaunchApprovals, launchDealId, newDraftSalt,
-  sampleSecondsPerBlock, validateAuctionLaunch, createOxleyLaunchClient, minimumRaiseFloor, MAX_FLOOR_PRICE_WAD } from "../src/launch.js";
+  sampleSecondsPerBlock, validateAuctionLaunch, createOxleyLaunchClient, minimumRaiseFloor, MAX_FLOOR_PRICE_WAD, type LaunchStage } from "../src/launch.js";
 import { addr, full, id32, manifest } from "./support/chain.js";
 import { NET_RAISE_50K, auction } from "./support/auction.js";
 import { ACCOUNT, BENEFICIARY, BOND_WEI, COIN, ENTRY, BOND, FACTORY, FEE, GAS_PRICE, createLaunchWorld, draftSalt, intent, owner, type LaunchWorld } from "./support/launch.js";
@@ -14,8 +15,12 @@ const refuses = (promise: Promise<unknown>, expected: string) => assert.rejects(
 const factoryAbi = full("creator-account-factory"), accountAbi = full("creator-account");
 const decode = (abi: ReturnType<typeof full>, data: Hex) => { const { functionName, args } = decodeFunctionData({ abi, data }); return [functionName, ...args ?? []]; };
 type Prepared = Awaited<ReturnType<ReturnType<typeof createOxleyLaunchClient>["prepareLaunch"]>>;
-/** A prepared step: the launch is not complete yet, so there is a transaction to sign. */
-const step = async (prepared: Promise<Prepared>) => { const result = await prepared; assert.notEqual(result.stage, "complete"); return result as Exclude<Prepared, { stage: "complete" }>; };
+/** A prepared step of the immediate launch: not complete, and not routed to a schedule, so there is a transaction to sign. */
+const step = async (prepared: Promise<Prepared>) => {
+  const result = await prepared;
+  assert.ok(["terms", "setup", "reset", "approve", "launch"].includes(result.stage), result.stage);
+  return result as Extract<Prepared, { stage: LaunchStage }> & { transaction: NonNullable<Extract<Prepared, { stage: LaunchStage }>["transaction"]> };
+};
 /** An account that setup created, with the fee already approved to it: the next step is the launch. */
 const ready = (patch: NonNullable<Parameters<LaunchWorld["makeAccount"]>[0]> = {}) => {
   const chain = createLaunchWorld();
@@ -273,7 +278,7 @@ test("a failed simulation is surfaced with its stage and the rule it broke, with
   assert.equal(launch.state.simulations.length + setup.state.simulations.length, 2, "each failure came from exactly one simulation");
 });
 
-test("what the chain would refuse is refused before any step: ticker, deal id, floor, pause, schedule, nonce and the account's identity", async () => {
+test("what the chain would refuse is refused before any step: ticker, deal id, floor, pause, nonce and the account's identity", async () => {
   const checks: [string, (chain: LaunchWorld) => void][] = [
     ["TICKER_UNAVAILABLE", chain => { chain.launch.tickerAvailable = false; }],
     ["DEAL_ID_USED", chain => { chain.launch.deal = { ...chain.launch.deal, creator: addr(77) }; }],
@@ -281,7 +286,6 @@ test("what the chain would refuse is refused before any step: ticker, deal id, f
     ["LAUNCH_PAUSED", chain => { chain.launch.enabled = false; }], ["LAUNCH_PAUSED", chain => { chain.launch.paused = true; }],
     ["PENDING_TRANSACTION", chain => { chain.launch.pending = 8; }],
     ["LAUNCH_ID_MISMATCH", chain => { chain.launch.dealIdFor = id32(0xbad); }],
-    ["LAUNCH_ALREADY_SCHEDULED", chain => { chain.launch.account = chain.makeAccount({ scheduledStart: 1_800_000_000n }); }],
     ["INVALID_CREATOR_ACCOUNT", chain => { chain.launch.account = chain.makeAccount({ registered: false }); }],
     ["CREATOR_BINDING_MISMATCH", chain => { chain.launch.account = chain.makeAccount({ initialController: addr(77) }); }],
     ["CREATOR_BINDING_MISMATCH", chain => { chain.launch.account = chain.makeAccount({ bondBeneficiary: addr(77) }); }],
@@ -346,11 +350,15 @@ test("the launch read back: nothing before setup, the account after it, and once
   await refuses(client.getLaunch({ owner: addr(0), draftSalt }), "INVALID_ADDRESS");
   await refuses(client.getLaunch({ owner, draftSalt: id32(0) }), "INVALID_HASH");
 });
-test("the client takes the reviewed manifest and refuses one without launch bindings, with the bond or fee changed, or reusing a contract", () => {
+test("the launch client takes the reviewed manifest and refuses one without launch bindings, with the bond or fee changed, or reusing a contract", () => {
   const good = manifest(), { launchBindings } = good;
   assert.doesNotThrow(() => createOxleyLaunchClient({ publicClient: createLaunchWorld().rpc, deployment: good }));
   const { launchBindings: _removed, ...without } = good;
-  assert.throws(() => parseDeployment(without), code("LAUNCH_BINDINGS_REQUIRED"));
+  // The bindings are optional for the manifest and required by the launch client alone (see test/deployment.test.ts for the trading and auction clients).
+  assert.throws(() => createOxleyLaunchClient({ publicClient: createLaunchWorld().rpc, deployment: without }), code("LAUNCH_BINDINGS_REQUIRED"));
+  assert.throws(() => parseLaunchDeployment(without), code("LAUNCH_BINDINGS_REQUIRED"));
+  assert.doesNotThrow(() => parseDeployment(without));
+  // When they are present they are validated in full, whoever reads the manifest.
   for (const key of ["creatorAccountFactory", "entryController", "bondEscrow"] as const) {
     const { [key]: _pin, ...rest } = launchBindings;
     assert.throws(() => parseDeployment({ ...good, launchBindings: rest }), code("LAUNCH_BINDINGS_REQUIRED"), key);
@@ -360,5 +368,5 @@ test("the client takes the reviewed manifest and refuses one without launch bind
   for (const launchFeeBaseUnits of ["0", "-1", "1.5", "", 1500000, undefined]) {
     assert.throws(() => parseDeployment({ ...good, launchBindings: { ...launchBindings, launchFeeBaseUnits } }), code("INVALID_LAUNCH_COST"), String(launchFeeBaseUnits));
   }
-  assert.ok(Object.isFrozen(parseDeployment(good).launchBindings) && Object.isFrozen(parseDeployment(good).launchBindings.bondEscrow));
+  assert.ok(Object.isFrozen(parseLaunchDeployment(good).launchBindings) && Object.isFrozen(parseLaunchDeployment(good).launchBindings.bondEscrow));
 });

@@ -21,7 +21,8 @@ export interface LaunchBindings {
 /**
  * The reviewed deployment manifest: every contract the clients read, pinned by address and runtime code hash. The curve and the Dynamic Bids hook
  * enforce the terms registry, the controller caps the launch floor and requires a 30,000 USDC net minimum raise, `launchBindings` pin the launch
- * contracts, and `bidRules` are the exact compiled per-wallet bid rules (all verified against the chain by `verifyDeployment`).
+ * contracts (only the launch client needs them, so a trading or auction manifest may omit them; when present they are validated in full), and `bidRules`
+ * are the exact compiled per-wallet bid rules (all verified against the chain by `verifyDeployment`).
  */
 export interface Deployment {
   readonly schemaVersion: 1;
@@ -43,13 +44,16 @@ export interface Deployment {
     readonly bidHook: ContractPin;
     readonly exposureHelper: ContractPin;
   };
-  readonly launchBindings: LaunchBindings;
+  /** Required by `createOxleyLaunchClient` only (see `LaunchDeployment`); optional for the trading and auction clients. */
+  readonly launchBindings?: LaunchBindings;
   /** The exact compiled bid rules; any other value is refused. */
   readonly bidRules: typeof BID_RULES;
   /** Informational release status, e.g. "live"; runtime pins remain authoritative. */
   readonly status?: string;
   readonly note?: string;
 }
+/** A deployment that carries the launch bindings: what `createOxleyLaunchClient` (and `parseLaunchDeployment`) works with. */
+export type LaunchDeployment = Deployment & { readonly launchBindings: LaunchBindings };
 export interface Anchor { readonly blockNumber: bigint; readonly blockHash: Hex; readonly timestamp: bigint }
 export interface Market {
   readonly id: Hex;

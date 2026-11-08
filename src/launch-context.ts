@@ -3,11 +3,11 @@ import { createAuctionContext } from "./auction-context.js";
 import { creatorAccountFactoryAbi, launchBondAbi, launchControllerAbi, launchEntryAbi } from "./launch-abis.js";
 import { AUCTION_MAX_BLOCKS_PER_HOUR, AUCTION_MIN_BLOCKS_PER_HOUR } from "./launch-duration.js";
 import { check, sameAddress } from "./validation.js";
-import type { Deployment } from "./types.js";
+import type { LaunchDeployment } from "./types.js";
 import type { LaunchRpcClient } from "./launch-types.js";
 
 /** The auction graph's verification plus the launch contracts: pins, bindings to each other, the launch fee and bond, the duration bounds and whether launches are open. */
-export function createLaunchContext(rpc: LaunchRpcClient, deployment: Deployment) {
+export function createLaunchContext(rpc: LaunchRpcClient, deployment: LaunchDeployment) {
   const auctions = createAuctionContext(rpc, deployment);
   const pins = deployment.launchBindings, factory = pins.creatorAccountFactory.address, controller = deployment.auctionController;
   const { anchor, canonical } = auctions;

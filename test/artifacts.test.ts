@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import type { Abi } from "viem";
 import { termsRegistryAbi, openingFeeCurveAbi, curveAbi, tradingGateAbi, auctionBidRouterAbi, bidHookAbi, ccaCheckpointAbi, ccaAuctionAbi, auctionAdapterAbi,
   tokenAbi, registryAbi, oxleyRevertAbi, launchMinimumRaiseAbi, launchFloorAbi, launchFloorCapAbi, auctionControllerAbi, launchControllerAbi, creatorAccountFactoryAbi,
-  creatorAccountAbi, launchEntryAbi, launchBondAbi } from "../src/abis.js";
+  creatorAccountAbi, launchEntryAbi, launchBondAbi, creatorFeeRouterAbi } from "../src/abis.js";
 import { launchMinimumRaiseAbi as fromIndex } from "../src/index.js";
 import { launchMinimumRaiseAbi as fromAuctions } from "../src/auctions.js";
 import { launchMinimumRaiseAbi as fromLaunch } from "../src/launch.js";
@@ -17,10 +17,10 @@ const pkg = JSON.parse(read("package.json")), live = JSON.parse(read("docs/live-
 const record = JSON.parse(read("test/fixtures/production-record.json")) as { compiledGraphSha256: string; releaseId: string; roles: Record<string, { address: string; runtimeCodeHash: string }> };
 const bytes32 = /^0x[0-9a-f]{64}$/;
 const published = ["adapter", "auction-controller", "bid-hook", "bid-router", "bond-escrow", "cca-auction", "creator-account-factory", "creator-account", "curve", "entry-controller",
-  "exposure-helper", "registry", "terms-registry"].map(name => `./abis/${name}.json`);
+  "exposure-helper", "fee-router", "registry", "terms-registry"].map(name => `./abis/${name}.json`);
 
 test("the published ABIs are the compiler ABIs of the deployed build: hash-pinned, tied to the deployment record and exported under the documented paths", () => {
-  assert.equal(live.evidence.length, 12); assert.equal(live.chainId, 99801);
+  assert.equal(live.evidence.length, 13); assert.equal(live.chainId, 99801);
   // The compiler job the record names, and the settings every runtime hash below was produced with.
   assert.deepEqual([live.release.releaseId, live.release.compiledGraphSha256], [record.releaseId, record.compiledGraphSha256]);
   assert.match(live.build.compiledGraph.fileSha256, /^[0-9a-f]{64}$/); assert.match(live.build.sourceRepository.commit, /^[0-9a-f]{40}$/);
@@ -29,7 +29,9 @@ test("the published ABIs are the compiler ABIs of the deployed build: hash-pinne
   const manifest = JSON.parse(read("deployments/elysium-testnet.json")), bindings = manifest.auctionBindings, launch = manifest.launchBindings;
   const pins: Record<string, { address: string; runtimeCodeHash: string }> = { curve: manifest.curve, registry: manifest.registry, termsRegistry: manifest.termsRegistry,
     controller: { address: manifest.auctionController, runtimeCodeHash: bindings.controllerRuntimeCodeHash }, bidRouter: bindings.bidRouter, adapter: bindings.adapter, bidHook: bindings.bidHook,
-    exposureHelper: bindings.exposureHelper, creatorAccountFactory: launch.creatorAccountFactory, entryController: launch.entryController, bondEscrow: launch.bondEscrow };
+    exposureHelper: bindings.exposureHelper, creatorAccountFactory: launch.creatorAccountFactory, entryController: launch.entryController, bondEscrow: launch.bondEscrow,
+    // The fee router is not a manifest pin (the pinned curve and bid router report to it, and the creator account was built with it); the record names it.
+    feeRouter: { address: record.roles.feeRouter!.address.toLowerCase(), runtimeCodeHash: record.roles.feeRouter!.runtimeCodeHash } };
   for (const item of live.evidence) {
     assert.equal(sha(readFileSync(new URL(`../${item.file}`, import.meta.url))), item.abiSha256, item.contract);
     assert.match(item.sourceSha256, /^[0-9a-f]{64}$/); assert.match(item.soliditySha256, /^[0-9a-f]{64}$/);
@@ -63,15 +65,15 @@ test("the published ABIs are the compiler ABIs of the deployed build: hash-pinne
   }
 });
 test("every typed subset entry matches the compiled ABI it claims to mirror", () => {
-  const [terms, curve, router, hook, cca, controller, adapter, registry, factory, account, entry, bond, exposure] = ["terms-registry", "curve", "bid-router", "bid-hook", "cca-auction",
-    "auction-controller", "adapter", "registry", "creator-account-factory", "creator-account", "entry-controller", "bond-escrow", "exposure-helper"].map(full) as Abi[];
+  const [terms, curve, router, hook, cca, controller, adapter, registry, factory, account, entry, bond, exposure, feeRouter] = ["terms-registry", "curve", "bid-router", "bid-hook", "cca-auction",
+    "auction-controller", "adapter", "registry", "creator-account-factory", "creator-account", "entry-controller", "bond-escrow", "exposure-helper", "fee-router"].map(full) as Abi[];
   const subsets: [string, readonly { type: string; name?: string }[], Abi][] = [
     ["terms registry", termsRegistryAbi, terms!], ["curve", curveAbi, curve!], ["opening fee", openingFeeCurveAbi, curve!], ["trading gate", tradingGateAbi, curve!],
     ["router", auctionBidRouterAbi, router!], ["hook", bidHookAbi, hook!], ["CCA checkpoints", ccaCheckpointAbi, cca!], ["CCA", ccaAuctionAbi, cca!],
     ["adapter", auctionAdapterAbi, adapter!], ["adapter floor", launchFloorAbi, adapter!], ["controller", auctionControllerAbi, controller!],
     ["controller floor cap", launchFloorCapAbi, controller!], ["controller minimum raise", launchMinimumRaiseAbi, controller!], ["controller launch", launchControllerAbi, controller!],
     ["registry", registryAbi, registry!], ["factory", creatorAccountFactoryAbi, factory!], ["creator account", creatorAccountAbi, account!],
-    ["entry controller", launchEntryAbi, entry!], ["bond escrow", launchBondAbi, bond!],
+    ["entry controller", launchEntryAbi, entry!], ["bond escrow", launchBondAbi, bond!], ["creator fee router", creatorFeeRouterAbi, feeRouter!],
   ];
   for (const [label, subset, abi] of subsets) for (const entry of subset) assert.ok(matches(entry, abi), `${label}: ${entry.type} ${entry.name}`);
   // The exposure helper is pinned by code hash and read by no call: its full ABI ships for completeness.
@@ -98,7 +100,7 @@ test("every exported path exists and the changelog and README describe the relea
   for (const [path, target] of Object.entries(pkg.exports as Record<string, unknown>)) {
     for (const file of typeof target === "string" ? [target] : [] as string[]) assert.ok(existsSync(new URL(`../${file}`, import.meta.url)), `${path} -> ${file}`);
   }
-  assert.equal(pkg.version, "0.7.0-next.1");
+  assert.equal(pkg.version, "0.7.0-next.2");
   // An "Unreleased" section may sit above the released version's section.
   assert.match(read("CHANGELOG.md"), new RegExp(`^# Changelog\\n\\n(?:## Unreleased\\n[\\s\\S]*?\\n\\n)?## ${pkg.version.replace(/\./g, "\\.")} - `));
   assert.match(read("README.md"), new RegExp(`version \`${pkg.version.replace(/\./g, "\\.")}\``));

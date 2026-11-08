@@ -5,10 +5,13 @@ import { spawnSync, execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MAX_FLOOR_PRICE_WAD, MINIMUM_GROSS_RAISE, MINIMUM_NET_RAISE, OxleyError, parseDeployment, testnetDeployment } from "../src/index.js";
+import { MAX_FLOOR_PRICE_WAD, MINIMUM_GROSS_RAISE, MINIMUM_NET_RAISE, OxleyError, createOxleyClient, parseDeployment, testnetDeployment } from "../src/index.js";
+import { createOxleyAuctionClient } from "../src/auctions.js";
+import { createOxleyLaunchClient, parseLaunchDeployment } from "../src/launch.js";
 import { BID_RULES } from "../src/auctions.js";
 import { deploymentAddresses } from "../src/deployment-addresses.js";
-import { addr, lowerAddresses, manifest, mockVerifiable, productionRecord, read, recordManifest } from "./support/chain.js";
+import { addr, id32, lowerAddresses, manifest, mockVerifiable, pin, productionRecord, read, recordManifest } from "./support/chain.js";
+import { createWorld } from "./support/world.js";
 import { createAuctionWorld, dealId, NET_RAISE_50K, owner, type AuctionWorld } from "./support/auction.js";
 import { scripts } from "./support/manifests.js";
 
@@ -40,7 +43,7 @@ test("the bundled manifest is the live record mapped to the SDK shape: pinned by
   assert.deepEqual(fixture.launchBindings, { creatorAccountFactory: { address: "0x343ce625f9930648ccebe503bd274606b376d98c", runtimeCodeHash: record.roles.creatorAccountFactory.runtimeCodeHash },
     entryController: { address: "0x52f5728513ce57184713b109e0119f5b6455f47b", runtimeCodeHash: record.roles.entryController.runtimeCodeHash },
     bondEscrow: { address: "0x70032f2faee1a6d25cf191b513f0dc9adf8928cb", runtimeCodeHash: record.roles.bondEscrow.runtimeCodeHash }, launchFeeBaseUnits: "1500000", deployerBondWei: "500000000000000000" });
-  assert.ok(Object.isFrozen(parsed.launchBindings) && Object.isFrozen(parsed.launchBindings.creatorAccountFactory));
+  assert.ok(Object.isFrozen(parsed.launchBindings) && Object.isFrozen(parsed.launchBindings!.creatorAccountFactory));
   assert.deepEqual(fixture.termsRegistry, TERMS_REGISTRY);
   assert.deepEqual(record.roles.termsRegistry, { address: TERMS_REGISTRY.address, runtimeCodeHash: TERMS_REGISTRY.runtimeCodeHash });
   // The embedded module is generated: it must not drift from the JSON file.
@@ -165,4 +168,53 @@ test("embedding is exact, detects a stale module and refuses a missing manifest 
     rmSync(join(sandbox.dir, "deployments/elysium-testnet.json"));
     assert.notEqual(sandbox.run().status, 0);
   } finally { rmSync(sandbox.dir, { recursive: true, force: true }); }
+});
+
+test("launchBindings are optional outside the launch client: the manifest parses without them (nine distinct contracts) and with them (twelve), and only the launch client requires them", async () => {
+  const good = manifest(), { launchBindings, ...without } = good;
+  const parsed = parseDeployment(without);
+  assert.equal("launchBindings" in parsed, false, "absent stays absent: no undefined key");
+  assert.ok(Object.isFrozen(parsed) && Object.isFrozen(parsed.curve) && Object.isFrozen(parsed.auctionBindings.bidHook));
+  assert.deepEqual(Object.keys(parseDeployment(good)).filter(key => !(key in parsed)), ["launchBindings"]);
+  // The nine-contract rule when absent: the controller and the eight pins are all different.
+  const nine: [string, Record<string, unknown>][] = [
+    ["curve is the registry", { curve: without.registry }], ["controller is the curve", { auctionController: without.curve.address }],
+    ["bid hook is the router", { auctionBindings: { ...without.auctionBindings, bidHook: without.auctionBindings.bidRouter } }],
+    ["quote is the terms registry", { quoteToken: { ...without.quoteToken, ...without.termsRegistry } }],
+  ];
+  for (const [label, patch] of nine) assert.throws(() => parseDeployment({ ...without, ...patch }), code("INVALID_DEPLOYMENT"), label);
+  // The twelve-contract rule when present: each launch pin differs from the nine and from the other two.
+  for (const key of ["creatorAccountFactory", "entryController", "bondEscrow"] as const) {
+    assert.throws(() => parseDeployment({ ...good, launchBindings: { ...launchBindings, [key]: { ...launchBindings[key], address: good.auctionController } } }), code("INVALID_DEPLOYMENT"), `${key} reuses the controller`);
+    assert.throws(() => parseDeployment({ ...good, launchBindings: { ...launchBindings, [key]: good.auctionBindings.bidHook } }), code("INVALID_DEPLOYMENT"), `${key} reuses the hook`);
+  }
+  assert.throws(() => parseDeployment({ ...good, launchBindings: { ...launchBindings, entryController: launchBindings.bondEscrow } }), code("INVALID_DEPLOYMENT"));
+  assert.doesNotThrow(() => parseDeployment({ ...good, launchBindings: { ...launchBindings, bondEscrow: pin(43) } }));
+  // Present means validated, for every client: nothing partial, malformed or mistaken passes because the caller never meant to launch.
+  for (const bad of [null, {}, [], "bindings", 7, { ...launchBindings, creatorAccountFactory: undefined }, { ...launchBindings, entryController: "0x1" }]) {
+    assert.throws(() => parseDeployment({ ...without, launchBindings: bad }), code("LAUNCH_BINDINGS_REQUIRED"), JSON.stringify(bad));
+  }
+  assert.throws(() => parseDeployment({ ...without, launchBindings: { ...launchBindings, bondEscrow: { ...launchBindings.bondEscrow, runtimeCodeHash: id32(0) } } }), code("INVALID_HASH"));
+  assert.throws(() => parseDeployment({ ...without, launchBindings: { ...launchBindings, bondEscrow: { ...launchBindings.bondEscrow, address: addr(0) } } }), code("INVALID_ADDRESS"));
+  assert.throws(() => parseDeployment({ ...without, launchBindings: { ...launchBindings, deployerBondWei: "1" } }), code("INVALID_BOND"));
+  assert.throws(() => parseDeployment({ ...without, launchBindings: { ...launchBindings, launchFeeBaseUnits: "0" } }), code("INVALID_LAUNCH_COST"));
+  assert.throws(() => createOxleyClient({ publicClient: createWorld().rpc, deployment: { ...without, launchBindings: { ...launchBindings, deployerBondWei: "1" } } }), code("INVALID_BOND"));
+  assert.throws(() => createOxleyAuctionClient({ publicClient: createWorld().rpc, deployment: { ...without, launchBindings: {} } }), code("LAUNCH_BINDINGS_REQUIRED"));
+  // The trading and auction clients work on a manifest without bindings, verifying the same graph.
+  assert.doesNotThrow(() => createOxleyClient({ publicClient: createWorld().rpc, deployment: without }));
+  assert.equal((await createOxleyClient({ publicClient: createWorld().rpc, deployment: without }).verifyDeployment()).blockNumber, 100n);
+  const world = createAuctionWorld(without as never);
+  assert.equal((await world.client().verifyDeployment()).blockNumber, 100n);
+  assert.equal((await createAuctionWorld(good).client().verifyDeployment()).blockNumber, 100n);
+  // The launch client requires them, with the same code whether the key is absent or the manifest is parsed first.
+  assert.throws(() => createOxleyLaunchClient({ publicClient: createWorld().rpc as never, deployment: without }), code("LAUNCH_BINDINGS_REQUIRED"));
+  assert.throws(() => createOxleyLaunchClient({ publicClient: createWorld().rpc as never, deployment: parsed }), code("LAUNCH_BINDINGS_REQUIRED"));
+  assert.throws(() => parseLaunchDeployment(without), code("LAUNCH_BINDINGS_REQUIRED"));
+  assert.doesNotThrow(() => createOxleyLaunchClient({ publicClient: createWorld().rpc as never, deployment: good }));
+  assert.equal(parseLaunchDeployment(good).launchBindings.deployerBondWei, "500000000000000000");
+  // The bundled testnet manifest keeps them, so the launch client takes it as it is.
+  assert.doesNotThrow(() => createOxleyLaunchClient({ publicClient: createWorld().rpc as never, deployment: testnetDeployment }));
+  const { launchBindings: _bundled, ...bundledWithout } = testnetDeployment;
+  assert.equal(parseDeployment(bundledWithout).chainId, 99801);
+  assert.throws(() => createOxleyLaunchClient({ publicClient: createWorld().rpc as never, deployment: bundledWithout }), code("LAUNCH_BINDINGS_REQUIRED"));
 });

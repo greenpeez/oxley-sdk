@@ -30,7 +30,8 @@ A runtime hash is the Keccak-256 of the deployed runtime code, including immutab
 already filled in: `schemaVersion` `1`, `network` `"mainnet"`, `quoteToken.symbol` `"USDC"` and
 `decimals` `6`, `launchBindings.deployerBondWei` `"500000000000000000"` (the bond escrow's 0.5 native-asset
 `CREATOR_DEPOSIT`, which the launch call carries), and `bidRules`, which must equal the compiled Dynamic Bid rules
-exactly. The twelve contract addresses must be distinct.
+exactly. The nine contract addresses of the auction graph must be distinct, and so must the twelve with the three launch contracts.
+`launchBindings` are required only by the launch client (`createOxleyLaunchClient`); a trading or auction integration may leave them out, but when the key is present they are validated in full.
 
 Outside the manifest: a working Elysium mainnet RPC endpoint, mainnet source-verification links for each
 contract, the provenance of the token identity, and (once an auction succeeds) the coin and market ID.
@@ -39,8 +40,8 @@ contract, the provenance of the token identity, and (once an auction succeeds) t
 
 `parseDeployment` (offline): schema, positive chain ID, explicit network, decimal `startBlock`, an
 address and 32-byte hash for every pin, distinct addresses, USDC with six decimals on mainnet, the
-`TESTNET_ON_MAINNET` rule, the exact `bidRules` (`INVALID_BID_RULES`) and the launch bindings
-(`LAUNCH_BINDINGS_REQUIRED`, `INVALID_LAUNCH_COST`, `INVALID_BOND`).
+`TESTNET_ON_MAINNET` rule, the exact `bidRules` (`INVALID_BID_RULES`) and, when present, the launch bindings
+(`LAUNCH_BINDINGS_REQUIRED`, `INVALID_LAUNCH_COST`, `INVALID_BOND`; the launch client alone refuses a manifest without them).
 
 `verifyDeployment` on the trading client, at one block, ending with a canonical-block check (`REORG`):
 

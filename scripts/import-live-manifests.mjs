@@ -41,11 +41,11 @@ assert.equal(compiledGraphSha256, record.compiledGraphSha256, "the compiled grap
 assert.equal(graph.generation, "gen10"); assert.equal(graph.chainId, record.chainId);
 for (const item of graph.sources) assert.equal(sha(readFileSync(join(app, PACKAGE, item.path))), item.sha256, `source changed since the deployed build: ${item.path}`);
 
-// [file, role]: every contract of the graph that the SDK touches. The quote token is the production Oxy-USDC, an external contract with no Oxley build.
+// [file, role]: every contract of the graph that the SDK touches (the fee router is read for the creator fee lock). The quote token is the production Oxy-USDC, an external contract with no Oxley build.
 const abis = [
   ["terms-registry", "termsRegistry"], ["curve", "curve"], ["bid-router", "bidRouter"], ["bid-hook", "bidHook"], ["exposure-helper", "exposureHelper"],
   ["auction-controller", "controller"], ["adapter", "adapter"], ["registry", "registry"], ["bond-escrow", "bondEscrow"], ["entry-controller", "entryController"],
-  ["creator-account-factory", "creatorAccountFactory"], ["creator-account", "creatorAccount"],
+  ["creator-account-factory", "creatorAccountFactory"], ["creator-account", "creatorAccount"], ["fee-router", "feeRouter"],
 ];
 const slots = refs => Object.values(refs ?? {}).flat().map(({ start, length }) => [start, length]).sort((a, b) => a[0] - b[0]);
 const evidence = abis.map(([name, role]) => {

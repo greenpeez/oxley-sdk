@@ -1,5 +1,99 @@
 # Changelog
 
+## 0.7.0-next.2 - 2026-11-08
+
+Adds the Gen10 creator actions to the launch client: the whole scheduled-launch lifecycle, the unused-bond claim, creator fee claims, and the publication of token details and images
+(a new `@oxley/sdk/metadata` entry point). Makes `launchBindings` optional outside the launch client. Still Gen10 only. No contract is deployed and no transaction is broadcast by this
+change; every step is an unsigned, simulated transaction, and the SDK holds no key.
+**Type-level breaking for code that switches on `prepareLaunch(...).stage`:** an account with a schedule pending is now routed instead of refused (below).
+
+### Added
+
+- **Scheduled launches** (`ElysiumCreatorAccountGen8.scheduleAuctionLaunch`, read from the contracts, the app's `lib/scheduled-launch*` and the settlement keeper):
+  - `launches.prepareScheduledLaunch({ ...launch, startTime })`: the immediate launch's steps (`terms`, `setup`, `reset`, `approve`) ending in `schedule`, which carries the 0.5 HYPE bond as `value` and the
+    `gasPrice` it was simulated at, after the 1.5 USDC fee is approved to the creator account. The fee and bond are taken then and held, with the ticker, until `startTime`; **there is no cancel**.
+    The start is whole Unix seconds from 18 minutes (the contract's 15 plus the three a step takes to sign) to 7 days 23 hours ahead (8 days less an hour for a quiet chain's old head), as the live app
+    enforces it (`LAUNCH_START_TOO_SOON`, `LAUNCH_START_TOO_FAR`, `INVALID_START_TIME`). It also checks the ticker's hold and the controller's 3 day cooldown (`TICKER_COOLDOWN`, `details.scheduleFrom`;
+    launching the same ticker stays open), the account's bond, lead times, window, name limit and dry-run gas limit and the controller's cooldown against this SDK (`SCHEDULE_RULES_MISMATCH`), and the
+    bond escrow's 1 gwei cap on the schedule's own dry run (`GAS_PRICE_TOO_HIGH`). The result carries `plan: { startTime, executionWindowEndsAt, tickerHeldUntil, cancellable: false }`.
+  - `launches.getScheduledLaunch(account)`: `phase` (`none`, `pending`, `executable`, `expired`, `executed`, `refunded`), `executable`, `refundable`, the stored `terms` (they stay readable after the launch
+    ran), the window, the time left, the held bond, a refunded fee the deployer could not receive (`feeOwed`), the ticker hold and the time it was judged at. The window is the contract's: executable from
+    the start to `start + 24 h` inclusive, refundable strictly after.
+  - `launches.prepareExecuteScheduledLaunch({ ...account, caller? })`: `executeScheduledLaunch()`. **Anyone may send it** from the start for 24 hours; the protocol keeper normally does, and the bond escrow
+    repays the sender's gas from the creator's bond (at most 12,000,000 gas at at most 1 gwei). The step is simulated from `caller` (default: the creator) and carries `gasPrice` (at most 1 gwei, which the account
+    enforces) and `gas` (the estimate plus a fifth, capped at 12,000,000). Refusals: `SCHEDULE_NOT_DUE`, `SCHEDULE_WINDOW_CLOSED`, `ALREADY_LAUNCHED`, `NOT_SCHEDULED`, `LAUNCH_PAUSED`, `CREATOR_TERMS_NOT_ACCEPTED`,
+    `GAS_PRICE_TOO_HIGH`, `SCHEDULE_EXECUTION_TOO_EXPENSIVE`, `SCHEDULE_RULES_MISMATCH` (the escrow's repayment differs from 12,000,000 gas at 1 gwei), `INSUFFICIENT_GAS`.
+  - `launches.prepareRefundScheduledLaunch({ ...account, caller? })`: `refundScheduledLaunch()`. **Anyone may send it** strictly after the window without a launch; the launch fee returns to the original creator
+    and the 0.5 HYPE bond becomes the account's refund balance, claimable by the original creator only. The sender pays the gas; the keeper never refunds (no protocol sponsorship). Refusals:
+    `SCHEDULE_NOT_EXPIRED`, `ALREADY_LAUNCHED`, `ALREADY_REFUNDED`, `NOT_SCHEDULED`. `launches.prepareClaimScheduledFee(...)` (`claimScheduledFee()`, anyone, pays the deployer only) retries a refunded fee the
+    deployer could not receive.
+  - **Quiet chains.** Elysium makes no empty blocks, so a head can be hours behind the clock and a simulation at it reads "not started yet". The phase is judged at the head's timestamp, or, when the head is at
+    least 10 minutes behind the clock, at the clock less a minute of skew (the keeper's and the app's rules). A step whose phase the head contradicts is returned with `simulated: false`, `simulationSkipped`, and the
+    full 12,000,000 gas (execution) or 500,000 gas (refund). Pass `now` to `createOxleyLaunchClient` to supply the clock.
+  - **Routing.** `prepareLaunch` and `prepareScheduledLaunch` no longer refuse an account with a schedule pending (`LAUNCH_ALREADY_SCHEDULED` is not raised): they return `stage: 'scheduled'` before the start
+    (`transaction: null`, nothing to send, `schedule` carries the state), `'execute'` in the window and `'refund'` after it, all before the pause check, so a refund is never blocked by a pause. The chain's stored schedule
+    wins over the input's terms. `getLaunch` carries `scheduledStart` and `handoverCount`.
+- **Creator accounts by address or deal.** Every read and claim takes the launch's `{ owner, draftSalt }`, **or `{ creatorAccount }`, or `{ dealId }`** (a launched market, resolved through the registry; `owner`
+  optional and then checked), because the salt is the creator's own record and the web app, the keeper and a new device work from the account and the deal. An address or deal is accepted only if the pinned
+  factory recorded that account for its own creator and deal (`INVALID_CREATOR_ACCOUNT`, `CREATOR_BINDING_MISMATCH`). The results carry `owner`, the account's original creator.
+- **Unused bond refund.** `launches.getBondRefund(account)`: the native HYPE the creator account holds for the original creator (`bondRefundBalance`) plus the credit the escrow could not pay (`claimBondRefund`
+  withdraws it first), the escrow's own record, and `reason`: `available`, `processing`, `scheduled`, `empty`, `not-launched`, `not-beneficiary`. `launches.prepareBondRefundClaim({ ...account, recipient? })`:
+  `claimBondRefund(recipient)` simulated from the original creator (the only account the contract lets send it, kept through any handover); `NOTHING_TO_CLAIM`, `BOND_NOT_CLAIMABLE`, `INVALID_RECIPIENT`, and
+  `BOND_PAYMENT_REJECTED` when the simulation returns `false` (the recipient cannot take the contract's 30,000 gas native payment).
+- **Creator fee claims.** `launches.getCreatorFees({ ...account, recipient? })`: `pendingFees(recipient)` split into credited and not yet checkpointed, the fee router's `creatorUnlockAt` and `active`, and `reason`
+  (`available`, `locked`, `inactive`, `empty`, `not-launched`, `not-beneficiary`). `launches.prepareCreatorFeeClaim({ ...account, recipient?, caller? })`: `claimFees(recipient)` simulated from the caller, whose
+  return value must equal the amount read (`FEES_CHANGED`). Anyone may send it but it pays only what is credited to `recipient`, which defaults to the account's current beneficiary (the app claims to the creator wallet;
+  the two differ only when a launch named another beneficiary). `CREATOR_FEES_LOCKED` (`details.unlockAt`), `CREATOR_FEES_INACTIVE`, `NOTHING_TO_CLAIM`, `NOT_LAUNCHED`, `NOT_BENEFICIARY`. The fee router is not a
+  manifest pin: it must be the one the pinned curve and bid router report to.
+- **Offline builders** from `@oxley/sdk/launch`: `buildScheduleAuctionLaunch` (value: the bond), `buildExecuteScheduledLaunch`, `buildRefundScheduledLaunch`, `buildClaimScheduledFee`, `buildClaimBondRefund`,
+  `buildClaimCreatorFees`; the rules `validateScheduleStart`, `scheduleStartBounds`, `scheduledPhase`, `tickerKey`, `tickerCooldownEnd` and the constants `SCHEDULE_MIN_LEAD_SECONDS`, `SCHEDULE_MAX_LEAD_SECONDS`,
+  `SCHEDULE_EXECUTION_WINDOW_SECONDS`, `SCHEDULE_HOLD_COOLDOWN_SECONDS`, `SCHEDULED_EXECUTION_GAS_CAP`, `SCHEDULED_EXECUTION_MAX_GAS_PRICE`. Types `ScheduledLaunchInput`, `ScheduleStage`, `ScheduledAction`,
+  `CreatorClaim`, `CreatorRef`, `ScheduledLaunchInfo`, `ScheduledTerms`, `BondRefundReason`, `CreatorFeesReason`.
+- **Token details and image publication** (`@oxley/sdk/metadata`, fetch-only): `createOxleyMetadataClient({ baseUrl? })` (default `https://app.oxley.fun`) with `prepareMetadataPublication` /
+  `submitMetadataPublication`, `prepareImagePublication` / `submitImagePublication`, `readTokenMetadata`, `readPublisher`, `resolveToken`, `serverTime` and `verifySignature`. The SDK builds the exact payload and the
+  data to sign and holds no key. A creator account is the creator, so its controller signs **EIP-712 typed data** (`OxleyCreatorPublication` version 8, chain 99801, the account as verifying contract;
+  `Publication(purpose, payloadHash = hashMessage(message), epoch = handoverCount, deadline = issuedAt + 600)`), which the account verifies on chain with `isValidPublicationSignature`; a plain wallet creator signs
+  the message. The server also requires its own origin in the signed intent and in the request's `Origin` header, a time within 590 seconds behind and 25 ahead of **its** clock (read from its `Date` header, never the
+  device's), and the saved revision: the SDK supplies all of them. Because that origin check exists to keep other websites from writing, publishing runs from Node, bots and agents or from the application's own
+  pages; reads work anywhere. Validation mirrors the server's field for field (`parseTokenMetadataFields`: 2,000 character description, HTTPS links, `x` on x.com or twitter.com, `telegram` on t.me, exactly four
+  fields; `validateTokenImage`: PNG, JPEG or WebP, 900,000 bytes, one frame, 16 million pixels), a signature is checked against the expected controller (and, with a public client, the creator account) before it is
+  sent, busy answers are retried with the same signature (6 attempts in 45 s for details, 3 for an image), and every refusal keeps the server's code in `OxleyError.code`. See [docs/creator.md](docs/creator.md).
+- **`@oxley/sdk/abis/fee-router.json`** (the fee router's compiler ABI, imported and proved by the same importer as the others: 13 contracts now), `creatorFeeRouterAbi`, and typed subsets for the schedule, claim and
+  publication functions of the creator account, the ticker hold of the controller and `funds`, `credits` and `SCHEDULED_LAUNCH_GAS` of the bond escrow, each tested against its compiler ABI.
+  `decodeOxleyRevert` also names `ScheduledLaunchRefused` (decoded to the rule inside it), `ScheduledLaunchTooExpensive`, `NotLaunched` and `FeesLocked`; the account's generic `InvalidConfiguration()` is
+  explained per step in `SIMULATION_FAILED` (`details.accountRevert`).
+- `npm run test:live:metadata` (`scripts/check-metadata-testnet.ts`) and an extended `test:live:launch`: read-only checks of the above against Elysium testnet and the live service.
+
+### Changed
+
+- **`launchBindings` are optional in the manifest.** `parseDeployment` no longer requires them: `createOxleyClient` and `createOxleyAuctionClient` take a manifest without them (nine distinct pinned contracts),
+  and `createOxleyLaunchClient` still requires them (`LAUNCH_BINDINGS_REQUIRED`, also from the new `parseLaunchDeployment`, which returns a `LaunchDeployment`). When the key is present it is validated in full for every
+  client (`LAUNCH_BINDINGS_REQUIRED` for a malformed value, `INVALID_LAUNCH_COST`, `INVALID_BOND`) and the three launch contracts must be distinct from the nine, twelve in all. `Deployment.launchBindings` is
+  `launchBindings?`; the bundled manifest and the mainnet template keep them.
+- `prepareLaunch`'s `stage` is now `'complete'`, a launch step, or (for a pending schedule) `'scheduled'`, `'execute'` or `'refund'`. `LaunchTransaction` has an optional `gas`.
+- `scripts/check-package.mjs` asserts the new value exports of `@oxley/sdk/launch`, `@oxley/sdk/abis` and `@oxley/sdk/metadata`, the new ABI file, the new docs and examples, the manifest both ways, and typed consumers
+  of the new calls.
+
+### Tests
+
+- 170 unit and ABI tests in 23 files pass (138 before): scheduled launches (calldata, every step, the window at its edges, quiet chains, each refusal and its code, the simulating account and the native value),
+  bond and fee claims (every reason, recipients, amounts, the simulated return), creator accounts by address and deal, the manifest both ways, the metadata and image rules against the server's own vectors, the EIP-712
+  digest from first principles, the signing flow with a throwaway key, retries and every server refusal. Mutating the new code (the schedule's value, the window's edges, the simulating account, the gas clamp,
+  the routing order, the cooldown, the claim recipient and return checks, the deadline, the signer check, the origin header, the manifest rules) fails these tests.
+  `typecheck`, `build` and `test:package` pass. The local EVM suite (`npm run test:evm`) needs Anvil, which is not installed on the build machine, and was not run.
+- Live and read-only, against Elysium testnet (block 26,290,856): `test:live:launch` passes, now including the scheduled-launch constants of a live creator account (0.5 HYPE bond, 15 minute and 8 day leads,
+  24 hour window, 80 byte names, 10,000,000 gas dry run), the controller's 3 day ticker cooldown, the bond escrow's repayment of 12,000,000 gas at 1 gwei, the account's `eip712Domain()` and publication purpose,
+  and `getScheduledLaunch`, `getBondRefund` and `getCreatorFees` on the three newest creator accounts by address (an immediate launch, a failed auction whose settled bond waits to be claimed, and a scheduled
+  launch that the keeper ran, which reads `executed` with its start time kept, as modelled). `test:live:metadata` passes against the live service for three deals (the service's controller and handover epoch equal the creator account's on chain; the typed data carries the account's domain; one deal has a saved revision and an image). `test:live:abis` passes with the fee router added: 13 of 13 contracts match the published build at block 26,294,299 (the fee router's runtime code with its immutable slots zeroed hashes to the build's template, and unmasked to the record's pin).
+
+### Not covered
+
+- No transaction has been sent by this client: the schedule, execution, refund and claims are simulated against a modelled graph and, live, only through read-only checks (constants, ABI domain, real creator
+  accounts read by address). A funded schedule, execution and refund on testnet is the next check; so is a signed publication, which writes to the live service and needs the controller's key.
+- The service's acceptance of a signature is proved only up to the SDK's own checks and the account's `eip712Domain()` on chain; no signature by a real controller was submitted.
+- The quiet-chain path (a due launch or refund sent unsimulated) is modelled, not observed.
+- The keeper's readiness gate for offering a schedule (the app asks its keeper's `/ready`) cannot be seen from an RPC; a bot that schedules should be ready to execute its own launch.
+
 ## 0.7.0-next.1 - 2026-11-08
 
 Adds the Gen10 launch client and the full compiler ABIs of every Gen10 contract the SDK touches, and corrects the curve ABI, which was an earlier build's. Still Gen10 only.

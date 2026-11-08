@@ -81,6 +81,10 @@ confirm each receipt and call again; `step.stages` lists what remains, starting 
 | `launch` | `launchAuctionWithCommitmentAndExactDuration(name, symbol, floorPriceWad, lockDays, commitmentBps, hours, durationBlocks)` | creator account | **the 0.5 HYPE bond, exactly** |
 | `complete` | none; the launch read back | | |
 
+To start the launch at a time you choose instead of at once, `prepareScheduledLaunch({ ...input, startTime })` returns the same steps ending in `schedule`
+(`scheduleAuctionLaunch`, which carries the same bond): see [scheduled launches](creator.md#scheduled-launches). A creator account that has one pending is routed to
+`scheduled`, `execute` or `refund` by `prepareLaunch`, not refused.
+
 - **Terms.** `step.terms` carries `{ enforced, accepted, requiredVersion, termsHash, uri }`. Show the text at
   `uri` and confirm its keccak256 equals `termsHash` before the owner signs: accepting is the owner's own act.
 - **The fee spender and the launch target are the creator account**, never the controller or the bid router.
@@ -135,8 +139,9 @@ the authoritative end is the CCA's `endBlock`, which `getLaunch` reports.
    (`LAUNCH_ID_MISMATCH`); the ticker is free (`TICKER_UNAVAILABLE`); the deal id is unused (`DEAL_ID_USED`); the
    adapter's `effectiveFloor` equals the SDK's calculation (`FLOOR_MISMATCH`); an existing creator account is
    registered by the pinned factory and bound to this owner, deal, quote token and bond escrow (`INVALID_CREATOR_ACCOUNT`,
-   `CREATOR_BINDING_MISMATCH`). Scheduled launches are not prepared: an account with one pending is refused
-   (`LAUNCH_ALREADY_SCHEDULED`).
+   `CREATOR_BINDING_MISMATCH`). An account with a scheduled launch pending is routed, not refused: `prepareLaunch` returns
+   `stage: 'scheduled'` (nothing to send before the start), `'execute'` (in the 24 hour window) or `'refund'` (after it); see
+   [creator actions](creator.md#scheduled-launches).
 4. **Wallet.** USDC for the fee (`INSUFFICIENT_QUOTE`), at least the bond in native HYPE (`INSUFFICIENT_BOND`), bond plus the
    step's gas estimate with a 20% buffer (`INSUFFICIENT_GAS`), no pending transaction.
 5. **Simulation.** The step is simulated from the owner at the observation block, and its gas estimated, before it
@@ -171,23 +176,29 @@ durationBlocks, bondWei, gasPrice? })` and `buildAcceptTerms` encode the same ca
 validate their input but verify nothing on chain: use `prepareLaunch` for anything you will sign. `buildAuctionLaunch`
 returns `value: bondWei`; every other builder returns `value: 0n`.
 
+The creator account's other calls have builders too: `buildScheduleAuctionLaunch({ ..., startTime, bondWei })` (value: the bond),
+`buildExecuteScheduledLaunch`, `buildRefundScheduledLaunch`, `buildClaimScheduledFee`, `buildClaimBondRefund({ ..., recipient })` and
+`buildClaimCreatorFees({ ..., recipient })` (all with value `0n`). Their contracts' bounds apply; the margins and the chain checks are `prepareScheduledLaunch`'s.
+
 ## Errors
 
 Every failure is an `OxleyError` with a `code` and, where useful, `details`. Besides the codes named above:
 `INVALID_LAUNCH`, `INVALID_ADDRESS`, `INVALID_HASH`, `INVALID_NAME`, `INVALID_SYMBOL`, `TICKER_RESERVED`,
 `INVALID_LOCK`, `INVALID_COMMITMENT`, `INVALID_DURATION`, `INVALID_BLOCK_RATE`, `INVALID_SAMPLE` (input);
 `CHAIN_MISMATCH`, `INVALID_BLOCK`, `AUCTION_BINDING_MISMATCH`, `LAUNCH_BINDING_MISMATCH`, `INVALID_TERMS_STATE`
-(verification); `INVALID_GAS_PRICE`. A manifest without launch bindings, or with a bond other than 0.5 HYPE, is refused by
-`parseDeployment` (`LAUNCH_BINDINGS_REQUIRED`, `INVALID_LAUNCH_COST`, `INVALID_BOND`). RPC transport errors are
+(verification); `INVALID_GAS_PRICE`. The scheduling, claim and publication codes are in the [creator guide](creator.md). A manifest
+without launch bindings is refused by `createOxleyLaunchClient` (`LAUNCH_BINDINGS_REQUIRED`); the other clients take it. Launch
+bindings that are present but malformed, or with a bond other than 0.5 HYPE, are refused by `parseDeployment` for every client
+(`LAUNCH_BINDINGS_REQUIRED`, `INVALID_LAUNCH_COST`, `INVALID_BOND`). RPC transport errors are
 not wrapped. `decodeOxleyRevert` also names the launch reverts (`TickerUnavailable`, `InvalidDurationBlocks`,
 `GasPriceTooHigh`, `NewEntriesPaused`, ...) for a revert you get from a wallet.
 
-## Not Prepared Here
+## After The Launch
 
-Scheduled launches (`scheduleAuctionLaunch`, `executeScheduledLaunch`, `refundScheduledLaunch`), the unused-bond claim,
-creator fee claims, handover and the publication of images and metadata are calls on the creator account or the
-Oxley app; their ABI is `@oxley/sdk/abis/creator-account.json`. Off-chain editable metadata (images, descriptions,
-links) is a separate workflow that this package does not publish.
+Scheduled launches (`prepareScheduledLaunch`, `getScheduledLaunch`, `prepareExecuteScheduledLaunch`, `prepareRefundScheduledLaunch`), the unused-bond
+claim (`getBondRefund`, `prepareBondRefundClaim`), creator fee claims (`getCreatorFees`, `prepareCreatorFeeClaim`) and the publication of token details
+and images (`@oxley/sdk/metadata`) are in the [creator guide](creator.md). Handover of the creator account is not prepared here; its ABI is
+`@oxley/sdk/abis/creator-account.json`.
 
 ## Launch Floor Rules
 

@@ -588,6 +588,44 @@
         [12329, 32]
       ],
       "deployed": null
+    },
+    {
+      "contract": "ElysiumFeeRouterGen8",
+      "role": "feeRouter",
+      "file": "abis/fee-router.json",
+      "export": "@oxley/sdk/abis/fee-router.json",
+      "sourcePath": "packages/elysium-contracts-vnext/out/ElysiumFeeRouterGen8.sol/ElysiumFeeRouterGen8.json",
+      "sourceSha256": "ff22308417bd4a0a490f101df901948eec40f1ee79e003b2ebe4fe87b49ed2cc",
+      "abiSha256": "a2a9efcde63d7c59139643b874f9b330b226bf199c02d81eead4a419dafb70d3",
+      "solidityPath": "packages/elysium-contracts-vnext/src/gen8/ElysiumFeeRouterGen8.sol",
+      "soliditySha256": "eca41f15e9a75b6e3c687c0f4ca69a6bdf0b048efe8d80c0a29e2c5331710156",
+      "creationCodeKeccak256": "0x0dfab20e14e0b70c751a92624ee1d716e22a08e712c3bf0f362e0d808912e5ba",
+      "runtimeTemplateKeccak256": "0x9961878ff6b270372d895ae0ad90c70832119c9c4622741c62004f318ff194b5",
+      "runtimeBytes": 21216,
+      "immutableReferences": [
+        [2065, 32],
+        [2135, 32],
+        [2743, 32],
+        [2921, 32],
+        [3164, 32],
+        [3504, 32],
+        [3565, 32],
+        [3611, 32],
+        [5375, 32],
+        [5665, 32],
+        [6115, 32],
+        [6541, 32],
+        [9009, 32],
+        [9179, 32],
+        [9313, 32],
+        [9383, 32],
+        [9589, 32],
+        [14490, 32]
+      ],
+      "deployed": {
+        "address": "0xedc210affb86c6b64b3ba07cb9dd3180dc177fb2",
+        "pinnedRuntimeCodeHash": "0xade9af3b074595b894f258341baf9650ed928d1ff0351339a05d928e5c6ee9b2"
+      }
     }
   ]
 }

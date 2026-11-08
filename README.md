@@ -7,7 +7,7 @@ client and returned as **unsigned** calldata; the SDK never signs, broadcasts or
 It runs in Node.js 20+ and browser applications, with no Oxley API key, backend, callback,
 provider allowlist or Uniswap v4 hook.
 
-This repository contains the **Elysium SDK**, version `0.7.0-next.1`, as ESM with
+This repository contains the **Elysium SDK**, version `0.7.0-next.2`, as ESM with
 TypeScript declarations. The `0.7` line is a breaking release: the earlier flat-fee, Gen2,
 Gen3, Gen8 and Gen9 support and `createOxleyMarkets` are gone, and the launch client is back
 for Gen10 only (see the [changelog](CHANGELOG.md) for the removals and an old to new table of
@@ -31,6 +31,12 @@ An agent can run the whole auction lifecycle, from the launch to the claim, with
 | Check a floor | `validateLaunchFloor(floorPriceWad)` | The $30,000 minimum raise and the 1e21 cap, before any read |
 | Prepare a launch step | `launches.prepareLaunch({ owner, draftSalt, name, symbol, floorPriceWad, creatorLockDays, listingCommitmentBps, auctionDurationHours })` | The next unsigned, simulated step: accept the terms, create the creator account, approve the 1.5 USDC fee to it, then launch with the 0.5 HYPE operating bond as the transaction's value |
 | Read the launch back | `launches.getLaunch({ owner, draftSalt })` | Creator account, coin, auction, end block, duration schedule and bond; `prepareLaunch` returns it as `stage: 'complete'` |
+| Schedule a launch | `launches.prepareScheduledLaunch({ ...launch, startTime })` | The same steps ending in `schedule`: the 1.5 USDC fee and the 0.5 HYPE bond are taken now and held until the start; no cancel |
+| Read a schedule | `launches.getScheduledLaunch({ owner, draftSalt })` | `pending`, `executable`, `expired`, `executed` or `refunded`, the stored terms, the window and the ticker hold; `prepareLaunch` routes a pending schedule to `scheduled`, `execute` or `refund` |
+| Execute or refund a schedule | `launches.prepareExecuteScheduledLaunch(...)`, `launches.prepareRefundScheduledLaunch(...)` | **Anyone** may send either: execution from the start for 24 hours (the bond repays the sender's gas), refund after the window |
+| Claim the unused bond | `launches.getBondRefund(...)`, `launches.prepareBondRefundClaim({ owner, draftSalt, recipient? })` | What is refundable and why it is or is not claimable yet; the original creator's `claimBondRefund`, simulated |
+| Claim creator fees | `launches.getCreatorFees(...)`, `launches.prepareCreatorFeeClaim(...)` | USDC credited to the beneficiary, the lock, and `claimFees(recipient)` simulated; anyone may send it, it pays the recipient only |
+| Publish token details | `createOxleyMetadataClient().prepareMetadataPublication(...)` from `@oxley/sdk/metadata` | The exact payload and the EIP-712 data the creator account's controller signs; `submitMetadataPublication(prepared, signature)` sends it. Images the same way |
 | Check the deployment | `auctions.verifyDeployment()` | Pins, bindings, bid rules, floor cap and minimum raise verified at one block |
 | Read limits | `auctions.getDynamicBidLimits({ dealId, owner })` | Wallet ceiling, allowance, live-bid slots, balance, terms standing, `maximumBid` |
 | Prepare a Dynamic Bid | `auctions.prepareDynamicBid({ dealId, caller, entered, maxPriceQ96 })` | Exact approvals and the bid transaction, with witnesses and a derived previous tick |
@@ -50,6 +56,7 @@ again from fresh chain state; a timeout is never proof that nothing was sent. Wo
 
 - [Public Builders docs](https://oxley.fun/docs/builders) and [npm package](https://www.npmjs.com/package/@oxley/sdk).
 - Launching an auction: [launch guide](docs/launch.md) (steps, costs, native bond, errors) and [example](examples/launch.ts).
+- After the launch: [creator guide](docs/creator.md) (scheduled launches, the unused bond, creator fees, token details and image) and examples ([schedule](examples/scheduled-launch.ts), [claims](examples/creator.ts), [details](examples/token-metadata.ts)).
 - Auction participation: [Dynamic Bids, rebids, claim and refund guide](docs/auctions.md) and examples ([bid and rebid](examples/dynamic-bid.ts), [exit and claim](examples/auction.ts)).
 - Trading the markets auctions create, terms and the opening surcharge: [markets](docs/markets.md).
 - Aggregators and exchanges: [provider handoff](docs/provider-handoff.md), [0x source guide](docs/0x.md), [mainnet requirements](docs/mainnet.md).
@@ -79,11 +86,12 @@ dist-tags determine the default version.
 | --- | --- |
 | `@oxley/sdk` | Trading client (`createOxleyClient`), swaps and integrator fees, terms, opening-surcharge mirror, `parseDeployment`, `testnetDeployment`, `decodeOxleyRevert`, the raise constants and typed ABIs |
 | `@oxley/sdk/auctions` | `createOxleyAuctionClient`, Dynamic Bid and rebid builders, claim and refund builders, the bid-rule helpers and constants, typed auction ABIs |
-| `@oxley/sdk/launch` | `createOxleyLaunchClient` (verify, `prepareLaunch`, `getLaunch`), the offline launch builders, `launchDealId`, `newDraftSalt`, the exact-duration helpers, the launch ABIs and the pure launch-floor rules (`validateLaunchFloor`, `minimumRaiseFloor`, `quoteAuctionFloor`) |
+| `@oxley/sdk/launch` | `createOxleyLaunchClient` (verify, `prepareLaunch`, `getLaunch`, the scheduled-launch, bond refund and creator fee calls), the offline launch and creator-account builders, `launchDealId`, `newDraftSalt`, the exact-duration and schedule helpers, the launch ABIs and the pure launch-floor rules (`validateLaunchFloor`, `minimumRaiseFloor`, `quoteAuctionFloor`) |
+| `@oxley/sdk/metadata` | `createOxleyMetadataClient`: builds and sends the creator's signed token details and image publications (fetch-only; the SDK never signs), and the validators and EIP-712 typed data they use |
 | `@oxley/sdk/abis` | Every typed ABI subset |
 | `@oxley/sdk/0x` | `buildZeroExBasic`, the optional 0x BASIC source action |
 | `@oxley/sdk/data` | `createOxleyDataClient`: fetch-only client for the public indexed data API |
-| `@oxley/sdk/abis/*.json` | Full compiler ABIs of the deployed Gen10 build: `curve`, `bid-router`, `bid-hook`, `terms-registry`, `auction-controller`, `adapter`, `registry`, `exposure-helper`, `creator-account`, `creator-account-factory`, `bond-escrow`, `entry-controller`, and the vendor `cca-auction`. Each typed ABI subset is tested against its file; [live-artifacts.json](docs/live-artifacts.json) proves which build they come from |
+| `@oxley/sdk/abis/*.json` | Full compiler ABIs of the deployed Gen10 build: `curve`, `bid-router`, `bid-hook`, `terms-registry`, `auction-controller`, `adapter`, `registry`, `exposure-helper`, `creator-account`, `creator-account-factory`, `bond-escrow`, `entry-controller`, `fee-router`, and the vendor `cca-auction`. Each typed ABI subset is tested against its file; [live-artifacts.json](docs/live-artifacts.json) proves which build they come from |
 | `@oxley/sdk/deployments/*.json` | `elysium-testnet.json` (reviewed Gen10 testnet manifest) and `mainnet.template.json` |
 
 ## Auctions
@@ -149,7 +157,10 @@ if (step.stage !== 'complete') {
   the bond escrow for the auction's delivery and refund gas, and unused bond returns to the original creator through the
   creator account. The SDK adds no sponsorship and no conversion, and HYPE is not a fee, bid or trade asset.
 - The launch step carries the `gasPrice` it was simulated at and is refused above the 1 gwei the bond escrow accepts.
-- A failed simulation is an `OxleyError` (`SIMULATION_FAILED`) with the stage and the decoded rule. Scheduled launches are not prepared.
+- A failed simulation is an `OxleyError` (`SIMULATION_FAILED`) with the stage and the decoded rule.
+- **Scheduled launches** use the same steps ending in `schedule` (`prepareScheduledLaunch`, with a `startTime` 18 minutes to 7 days 23 hours ahead). The fee and the 0.5 HYPE bond are taken then and held, with the
+  ticker, until the start; there is no cancel. Anyone may execute the launch from the start for 24 hours (the keeper normally does; the bond repays the sender's gas) and anyone may refund it after the window.
+  `prepareLaunch` on an account with a schedule pending returns `scheduled`, `execute` or `refund` instead of refusing it. See the [creator guide](docs/creator.md).
 
 See the [launch guide](docs/launch.md) and [example](examples/launch.ts).
 
@@ -265,7 +276,7 @@ and reconcile it before retrying. A timeout is not proof that nothing was sent.
 
 | Method/export | Result |
 | --- | --- |
-| `parseDeployment(json)` | Validated, frozen manifest: twelve distinct pinned contracts (the auction graph and the launch bindings), the launch fee and bond, and the exact bid rules |
+| `parseDeployment(json)` | Validated, frozen manifest: nine distinct pinned contracts (the auction graph), plus the three launch contracts, the launch fee and the bond when `launchBindings` are present (twelve distinct in all; optional except for the launch client), and the exact bid rules |
 | `createOxleyClient({publicClient,deployment})` | Independent RPC trading client; no hosted Oxley service |
 | `verifyDeployment()` | Chain, runtime hash, quote binding, decimals and terms-registry binding checks |
 | `discoverMarkets({cursor?,fromBlock?,toBlock?,pageSize?,coin?})` | Event-based page of active markets and canonical cursor |
@@ -280,6 +291,10 @@ and reconcile it before retrying. A timeout is not proof that nothing was sent.
 | `buildSwapWithFee(quote,options)`, `integratorFeeAmount(basis,bps)` | Offline builder and fee arithmetic (`MAX_INTEGRATOR_FEE_BPS = 100`) |
 | `openingSurchargeWadAt(seconds)`, `buyFeeBps(rate)` | Mirror of the curve's decaying opening surcharge schedule |
 | `createOxleyLaunchClient({publicClient,deployment})` from `@oxley/sdk/launch` | `verifyDeployment`, `getLaunch({owner,draftSalt,beneficiary?})`, `prepareLaunch({owner,draftSalt,name,symbol,floorPriceWad,creatorLockDays,listingCommitmentBps,auctionDurationHours,durationBlocks?,secondsPerBlock?,beneficiary?})` |
+| `prepareScheduledLaunch({...launch,startTime})`, `getScheduledLaunch(id)`, `prepareExecuteScheduledLaunch({...id,caller?})`, `prepareRefundScheduledLaunch({...id,caller?})`, `prepareClaimScheduledFee(...)` on the launch client | The scheduled-launch lifecycle: schedule (fee and bond taken, no cancel), read (phase, terms, window), execute (anyone, from the start for 24 h, gas repaid from the bond), refund (anyone, after the window) |
+| `getBondRefund(id)`, `prepareBondRefundClaim({...id,recipient?})`, `getCreatorFees({...id,recipient?})`, `prepareCreatorFeeClaim({...id,recipient?,caller?})` on the launch client | The unused bond (original creator only) and the creator's fee share (anyone may send, the recipient is paid), each with its amount, why it is or is not claimable yet, and the simulated claim |
+| `buildScheduleAuctionLaunch`, `buildExecuteScheduledLaunch`, `buildRefundScheduledLaunch`, `buildClaimScheduledFee`, `buildClaimBondRefund`, `buildClaimCreatorFees`, `validateScheduleStart`, `scheduledPhase` from `@oxley/sdk/launch` | Offline encoders for the creator account's calls and the schedule rules |
+| `createOxleyMetadataClient({baseUrl?,fetch?})` from `@oxley/sdk/metadata` | `readTokenMetadata(dealIds)`, `prepareMetadataPublication` / `submitMetadataPublication`, `prepareImagePublication` / `submitImagePublication`, `readPublisher`, `serverTime`, `verifySignature`; `publicationTypedData`, `parseTokenMetadataFields`, `validateTokenImage` and the other validators are exported beside it |
 | `buildCreatorAccount`, `buildLaunchApprovals`, `buildAuctionLaunch`, `launchDealId`, `newDraftSalt` from `@oxley/sdk/launch` | Offline encoders for the launch steps (`buildAuctionLaunch` returns the bond as `value`), the controller's deal id and a random draft salt |
 | `auctionDurationBounds(hours)`, `auctionDurationBlocks({hours,secondsPerBlock})`, `sampleSecondsPerBlock(client,options?)` from `@oxley/sdk/launch` | The 14,400 to 72,000 blocks an hour the controller accepts, the conversion from a block rate, and a rate measured over recent blocks |
 | `createOxleyAuctionClient({publicClient,deployment})` from `@oxley/sdk/auctions` | `verifyDeployment`, `getAuction`, `getDynamicBidLimits`, `prepareDynamicBid`, `prepareDynamicRebid`, `prepareClaim`, `prepareRefund` |
@@ -301,9 +316,9 @@ Serialize bigint values as decimal strings at JSON boundaries.
   by the separate `/auctions` client; they are not atomic swap routes. The `/data` client
   is read-only. No SDK client signs or broadcasts.
 - Bridge transfers, mint and twin markets, native-asset bid or trade payments and
-  exact-output trading remain outside the package's scope. A launch is the one transaction
-  that carries native value: the creator's 0.5 HYPE operating bond, which the creator pays
-  with the gas of its steps (see [launching](docs/launch.md)).
+  exact-output trading remain outside the package's scope. A launch (and the schedule of one) is the one
+  transaction that carries native value: the creator's 0.5 HYPE operating bond, which the creator pays
+  with the gas of its steps (see [launching](docs/launch.md) and the [creator guide](docs/creator.md)).
 - A market is identified by `(chainId, curve, marketId)`. Do not assume token
   symbols are identities.
 - Native on-chain reads are `quoteBuy(id,amount)` and `quoteSell(id,amount)`, both

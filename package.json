@@ -1,6 +1,6 @@
 {
   "name": "@oxley/sdk",
-  "version": "0.7.0-next.1",
+  "version": "0.7.0-next.2",
   "description": "Oxley Gen10 auctions on Elysium: launches, market data, quotes, swaps (with optional integrator fees), terms, Dynamic Bids and rebids, and claim and refund transactions, as unsigned calldata for apps, bots and AI agents",
   "type": "module",
   "license": "MIT",
@@ -43,6 +43,10 @@
       "types": "./dist/launch.d.ts",
       "import": "./dist/launch.js"
     },
+    "./metadata": {
+      "types": "./dist/metadata.d.ts",
+      "import": "./dist/metadata.js"
+    },
     "./abis/curve.json": "./abis/curve.json",
     "./abis/bid-router.json": "./abis/bid-router.json",
     "./abis/bid-hook.json": "./abis/bid-hook.json",
@@ -56,6 +60,7 @@
     "./abis/creator-account-factory.json": "./abis/creator-account-factory.json",
     "./abis/bond-escrow.json": "./abis/bond-escrow.json",
     "./abis/entry-controller.json": "./abis/entry-controller.json",
+    "./abis/fee-router.json": "./abis/fee-router.json",
     "./deployments/elysium-testnet.json": "./deployments/elysium-testnet.json",
     "./deployments/mainnet.template.json": "./deployments/mainnet.template.json"
   },
@@ -84,6 +89,7 @@
     "test:live:auctions": "node --import tsx scripts/check-auctions-testnet.ts",
     "test:live:launch": "node --import tsx scripts/check-launch-testnet.ts",
     "test:live:abis": "node --import tsx scripts/check-abis-testnet.ts",
+    "test:live:metadata": "node --import tsx scripts/check-metadata-testnet.ts",
     "test:live:markets": "node --import tsx scripts/check-markets-testnet.ts",
     "embed": "node scripts/embed-deployments.mjs",
     "prepack": "npm run build"

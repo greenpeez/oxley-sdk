@@ -23,6 +23,8 @@ export async function launch(input: AuctionLaunchInput, send: (transaction: Laun
   for (let steps = 0; steps < 8; steps++) {
     const step = await launches.prepareLaunch(input);
     if (step.stage === "complete") return step.launch; // { coin, auction, auctionId, endBlock, schedule, bondHeld, ... }
+    // An account with a schedule pending is routed: nothing to send before the start, `execute` in the 24 hour window and `refund` after it (see examples/scheduled-launch.ts).
+    if (step.stage === "scheduled") throw new Error(`A scheduled launch is pending for ${step.schedule.startTime}; see examples/scheduled-launch.ts`);
     // Show the owner what is about to be signed: step.stage, step.stages, step.launchFee (USDC), step.deployerBondWei (HYPE), step.estimatedGasCost (HYPE).
     // At step.stage === "terms", show the text at step.terms.uri first. Persist a pending record before sending and the hash right after.
     await send(step.transaction, step.stage);

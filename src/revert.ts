@@ -6,7 +6,7 @@ export type OxleyRevertName = "WalletCapExceeded" | "CreatorBidNotAllowed" | "Tr
   | "DeadlineExpired" | "QuoteDust" | "CapitalShortfall" | "WalletBidLimitReached" | "BidAmountTooLow" | "PriceLevelLimit"
   | "BidPriceTooHigh" | "InvalidWitness" | "BidExpired" | "NotBidOwner" | "BidNotOutbid" | "RebidPriceTooLow" | "FloorPriceAboveMaximum" | "TradeMoveLimit"
   | "TickerUnavailable" | "InvalidTicker" | "ReservedTicker" | "InvalidListingCommitment" | "InvalidDurationBlocks" | "InvalidRequestedHours" | "FixtureLaunchOnly"
-  | "NewEntriesPaused" | "GasPriceTooHigh" | "NeedsFunding";
+  | "NewEntriesPaused" | "GasPriceTooHigh" | "NeedsFunding" | "ScheduledLaunchRefused" | "ScheduledLaunchTooExpensive" | "NotLaunched" | "FeesLocked";
 export interface OxleyRevert {
   readonly name: OxleyRevertName;
   readonly args: readonly unknown[];
@@ -20,7 +20,7 @@ const isoTime = (seconds: bigint) => seconds >= 0n && seconds <= 8_640_000_000_0
 export const tradingNotOpenMessage = (fallbackAt: bigint) =>
   `Trading opens after all bids are delivered (by ${isoTime(fallbackAt)} at the latest)`;
 
-function candidates(value: unknown, out: Hex[], depth = 0): Hex[] {
+export function candidates(value: unknown, out: Hex[], depth = 0): Hex[] {
   if (typeof value === "string") {
     if (/^0x(?:[0-9a-fA-F]{2}){4,}$/.test(value)) out.push(value as Hex);
   } else if (value && typeof value === "object" && depth < 8) {
@@ -70,6 +70,11 @@ const MESSAGES: Partial<Record<OxleyRevertName, (args: Args, context: RevertCont
   NewEntriesPaused: () => "New launches are paused",
   GasPriceTooHigh: () => "The gas price is above the cap the operating bond repays; wait for a lower gas price and prepare again",
   NeedsFunding: () => "The operating bond does not cover the auction's delivery gas at the current gas price; wait for a lower gas price and prepare again",
+  // The creator account wraps whatever the dry run of a scheduled launch hit; a revert the decoder knows is returned as that rule, never as this wrapper (see `decode`).
+  ScheduledLaunchRefused: () => "The scheduled launch was refused when its terms were checked; review the terms and try again",
+  ScheduledLaunchTooExpensive: args => `This launch needs ${args[0]} gas, more than the 10000000 a scheduled launch may use`,
+  NotLaunched: () => "This creator account has not launched yet",
+  FeesLocked: () => "Creator fees stay locked until the auction has succeeded and the creator lock has ended",
   FloorPriceAboveMaximum: (args, { symbol }) => `The ${symbol} floor price is above the maximum this release allows; use a floor of at most ${args[1]} (floorPriceWad units)`,
 };
 function explainRevert(result: NonNullable<ReturnType<typeof decodeResult>>, context: RevertContext): OxleyRevert | null {
@@ -85,10 +90,16 @@ function decode(data: Hex, context: RevertContext, depth: number): OxleyRevert |
   if (result.errorName === "ValidationHookCallFailed") {
     return depth < 2 ? decode(result.args[0], context, depth + 1) : null;
   }
+  // A scheduled launch's dry run: the rule it hit is the answer; an empty or unknown reason keeps the wrapper's own message.
+  if (result.errorName === "ScheduledLaunchRefused" && depth < 2) {
+    const inner = decode(result.args[0] as Hex, context, depth + 1);
+    if (inner) return inner;
+  }
   return explainRevert(result, context);
 }
 /**
- * Pure decoder for Oxley rule reverts (terms, curve trades and the trading gate, Dynamic Bids and rebids, and the launch rules: floor cap, ticker, duration, pause, gas price). Accepts raw
+ * Pure decoder for Oxley rule reverts (terms, curve trades and the trading gate, Dynamic Bids and rebids, and the launch rules: floor cap, ticker, duration, pause, gas price,
+ * scheduled launches and creator fee claims; a scheduled launch's `ScheduledLaunchRefused(reason)` is decoded to the rule inside it). Accepts raw
  * revert data or a viem/EIP-1193 error object and returns null for anything else (including unrelated custom errors). Never performs RPC calls.
  */
 export function decodeOxleyRevert(errorOrData: unknown, options: { quoteSymbol?: string } = {}): OxleyRevert | null {
