@@ -1,128 +1,84 @@
 # Validation Evidence
 
-Updated 2026-11-07. This evidence covers the SDK and its selected integration
-surface, not whole-repository acceptance or a new contract security audit.
+Evidence for `@oxley/sdk` `0.7.0-next.0` and its one supported release, Gen10
+(`elysium-auctions-gen10-1fa4ef2a98fd14ed`, Elysium testnet, chain `99801`). It covers this package, not
+whole-repository acceptance or a contract security audit. No funded transaction is part of it, and no
+result of a live run is recorded here: the scripts below print what they verified when you run them.
 
-## Current Evidence
+## Offline Suites
 
-- Gen10 support (`0.6.0-next.3`, 2026-11-07, offline only): 181 unit/ABI tests, the 17 local EVM tests (Anvil 1.7.1), typecheck, build and the
-  clean-archive consumer check pass. The bundled Gen10 manifest is the importer's mapping of the live deployment record
-  (`gen10-live-20261106/gen10-deployment.json`, sha256 in [live-artifacts.json](live-artifacts.json)); a test rebuilds it from the
-  checked-in record byte for byte. The controller's `minimumRaise` 30,000,000,000 and `minimumGrossRaise` 30,303,030,303 are the readbacks
-  recorded with that deployment; the lowest Gen10 floor the SDK computes, 101,010,101,030,162,826,490, equals the figure recorded by the
-  application's fork rehearsal. The offline suites model the controller, hook and CCA, so no Gen10 testnet read has been run by these SDK paths:
-  `npm run test:live:markets` (read-only, no signer) now also verifies the Gen10 auction graph and is the check to run against the live
-  release. No transaction was sent and no contract was deployed.
-- Current markets, terms, integrator fees and Gen8 Dynamic Bids (`0.6.0-next.1`, 2026-10-29): 129 unit/ABI
-  tests, the 17 local EVM tests, typecheck, build and the clean-archive consumer check pass. New offline suites cover
-  per-generation resolution, quotes and calldata against the full compiled ABIs, terms, the opening-surcharge mirror,
-  fee batches (ordering, rounding, caps, tamper and staleness checks) and Dynamic Bids against a modelled hook and CCA.
-  `npm run test:live:markets` (read-only, no signer) verified every pin of the flat-fee, Gen3 and Gen8 manifests, the
-  Gen8 auction graph and the hook's compiled rules, resolved live flat-fee and Gen3 markets, quoted and prepared and
-  checked fee-bearing buys and sells, read terms state (nothing enforced yet) and matched the surcharge mirror to both
-  curves. No Gen8 market exists yet, so Dynamic Bid preparation has no live counterpart. Sources and hashes:
-  [live-artifacts.json](live-artifacts.json). No funded transaction was sent.
-- Gen2 support (`0.6.0-next.0`, 2026-10-20, offline only): 54 unit/ABI tests
-  pass, including 14 Gen2 tests with mocked RPC fixtures; Gen2 ABIs are pinned by
-  sha256 and source commit in [gen2-artifacts.json](gen2-artifacts.json). The Gen2
-  manifest holds planned fork-rehearsal addresses, so no Gen2 testnet read, local
-  EVM or funded check has been run against these SDK paths yet.
-- [Auction launch validation](launch-validation.md): `0.5.0-next.4` adds unsigned
-  launch preparation, creator-account ABIs and restart recovery. All 40 unit
-  tests and 17 local EVM tests pass; read-only testnet checks verify launch pins,
-  costs, gas-price cap and floor calculations. No remote funded launch was sent.
-- [Funded testnet buy and sell](funded-swaps-2026-10-16.md): completed through
-  the deployed application using the SDK's independent RPC quotes and locally
-  computed 1% minimums. Successful receipts, exact outputs, historical balances,
-  approvals and recovery were verified on 2026-10-16.
-- [Auction SDK validation](auction-validation.md): real-bytecode local
-  bid/refund/claim tests and read-only testnet graph/fee checks.
-- [Indexed data validation](data-validation.md): public API checks across all
-  eight resources, browser CORS and indexed-feed boundaries.
-- The preceding `0.5.0-next.3` was a documentation-only release. Its runtime,
-  ABIs, deployment profiles and dependencies remained those of `0.5.0-next.2`.
+`npm run typecheck` checks the library, tests and examples. `npm test` runs `test/*.test.ts` against
+in-memory RPC doubles; no network, signer or compiler is needed. Counts: see CHANGELOG 0.7.0-next.0.
 
-For that preceding documentation-only release on October 16: TypeScript checks passed, all 32 SDK
-unit/ABI tests passed, the ESM/declaration build passed, and a clean consumer
-installed the actual archive and verified imports, types and the file allowlist.
-The public docs content/search suite passed all 17 tests. No new funded action
-was required or submitted for this documentation update.
-
-The funded trades do not prove funded auction participation, third-party wallet
-extension compatibility, 0x hosted-route acceptance or mainnet readiness.
-
-## Original Trading Checks (2026-10-13)
-
-| Check | Result |
+| Area | Tests |
 | --- | --- |
-| TypeScript library, tests and examples | Pass |
-| Scoped source, scripts, tests and examples lint | Pass |
-| Unit/ABI/provenance tests | 14 passing |
-| Local EVM suite | Six passing scenarios, plus suite wrapper (7 reported tests) |
-| Standalone build | Pass; ESM JavaScript and declaration files emitted |
-| Clean archive consumer | Imports, raw ABI JSON exports and TypeScript declarations pass |
-| Distribution allowlist | Only runtime, ABI, docs, examples, deployment profiles and license |
-| Public RPC deployment verification | Chain 99801 and all three contract pins match |
+| Manifest and verification: the bundled manifest is the live deployment record mapped to the SDK shape and equals the embedded export; pins, bid rules, distinct addresses; placeholders and testnet-on-mainnet refused; controller floor cap and minimum raise; changed hook, helper or terms registry | `deployment.test.ts`, `sdk.test.ts`, `terms.test.ts` |
+| Trading: quotes from the curve's views with its real fee, swap calldata against the compiled curve ABI, 0x BASIC offset 36, exact zero-first approvals, trading gate, discovery, reorg rejection, quote batches bounded to four reads in flight | `sdk.test.ts`, `markets.test.ts`, `client-lifecycle.test.ts`, `opening-fee.test.ts` |
+| Integrator fees: ordered fee batches, rounding and caps, tamper and staleness checks, EIP-5792 request | `integrator-fee.test.ts` |
+| Terms and revert decoding | `terms.test.ts`, `revert.test.ts`, `floor-cap.test.ts` |
+| Auctions: Dynamic Bids, rebids, wallet limits, witnesses, claims and exits, launch floor rules | `auctions.test.ts`, `dynamic-bids.test.ts`, `dynamic-bid-rules.test.ts`, `launch-floor.test.ts` (details in [auction validation](auction-validation.md)) |
+| ABIs and artifacts: typed subsets match the compiled ABIs, ABI and fixture hashes, package exports | `artifacts.test.ts`, `abi.test.ts` |
+| Indexed data client: see [data validation](data-validation.md) | `data.test.ts`, `data-tip.test.ts`, `market-observations.test.ts` |
 
-The public verification at block `8565674`, hash
-`0xd90aa6df6d00a99a3b28ac5a5901d7e2392e67b01895caf4d5174c68d870b4d0`,
-checked curve, registry and quote-token runtime hashes, the curve's actual quote
-binding, and six-decimal token precision. This was read-only.
+`npm run test:package` packs the actual archive, installs it into an unrelated project, imports every
+entry point, compiles the declarations and checks the file allowlist.
 
-An optional quote check for historical pilot market
-`0x71d75a89abd94f6e48e76b94da911ee67ac8a976525dd73908c0cd37661b2093`
-was correctly refused as an unsupported/inactive market. It is not a valid live
-swap example. That original run was read-only; quote and settlement parity were
-demonstrated locally with the retained real curve bytecode. The October 16 funded
-test above adds remote trade evidence without changing this historical result.
+## Live Read-Only Checks
 
-## Local Settlement Coverage
+These scripts read Elysium testnet only: no signer, no transaction. They use the public RPC
+`https://testnet-rpc.elysium.kinetiq.xyz` unless `OXLEY_RPC_URL` is set, and the bundled manifest.
 
-- Actual VNext curve, fee router, registry and listing-vault creation bytecode,
-  with local six-decimal ERC-20 and market fixtures.
-- Direct buy/sell: quote output equals actual recipient balance change.
-- Generic routed buy: provider receives output, then pays its recipient; the
-  Bought event records the executor as buyer.
-- Split fills and token-to-USDC-to-another-token multihop, in one transaction.
-- Failed final-route minimum: caller balances, curve position/capital, treasury,
-  fee balances and reward state remain unchanged.
-- Failed output transfer: atomic rollback. Failed treasury transfer: trade
-  succeeds with the existing deferred treasury liability.
-- Buy pause blocks buys while an allowed sell can still settle; expired and
-  impossible-minimum swaps revert.
+| Command | What it does | Optional env |
+| --- | --- | --- |
+| `npm run test:live` | Trading client `verifyDeployment`; with a market and caller, one buy quote for 1 USDC (Oxy-USDC) | `OXLEY_MARKET_ID` and `OXLEY_CALLER` (both) |
+| `npm run test:live:auctions` | Auction client `verifyDeployment` (all pins, bindings, hook rules, floor cap, minimum raise); asserts the router's `quoteBid(100 USDC)` is principal 100,000,000, debit 100,100,000, fee 100,000 | `OXLEY_AUCTION_ID` (deal ID) reads the auction; with `OXLEY_BIDDER` also that wallet's limits |
+| `npm run test:live:launch` | Auction client `verifyDeployment`, then compares `quoteAuctionFloor` with the live adapter's `effectiveFloor` for six floors and checks `validateLaunchFloor` at the lowest accepted floor and one unit below | none beyond `OXLEY_RPC_URL` |
+| `npm run test:live:markets` | Opening-surcharge schedule against the curve's `surchargeWadAt` (0 to 70 s), trading and auction `verifyDeployment`; with a market, its status, quotes, fee-bearing buy and sell batches and terms status | `OXLEY_MARKET_ID` |
 
-Illustrative gas in this fixture: direct buy `633478`, sell `220447`, and routed
-BASIC buy `549230`. These use different preceding states and are not an overhead
-comparison or a mainnet gas guarantee. SDK simulation estimated `685796` for
-the tested direct buy. Always estimate the actual funded route.
+The market check uses placeholder holder and recipient addresses, so it needs no funded wallet and its fee
+batches are prepared and checked, never sent. The auction and market checks pace their requests for the
+public RPC. Run them against the live Gen10 release before relying on it.
 
-Quote batches cache market validation within the selected block, avoiding
-repeated registry/market/decimals reads for each sample of the same market.
-For a warm single-market batch of 64 samples, the SDK performs 64 quote reads,
-three shared market reads, one chain read and two block reads: 70 RPC method
-calls, bounded to four samples in flight. Transport batching may reduce HTTP
-requests. No remote latency or throughput guarantee is asserted.
+## Local EVM Suite
 
-## Reproduction And Boundaries
+`ANVIL_BIN=anvil npm run test:evm` needs Anvil from Foundry. It runs `test/integration/auctions.test.ts`
+on a local chain (id `31337`): the vendor continuous clearing auction factory and auction bytecode, the
+Permit2 runtime (hash-checked), a controllable block clock, and retained scaffolding that creates
+auctions and places bids. Using the SDK's approval, exit and claim transactions it checks accepted bids
+and fees on top, premature exit, failed-auction refunds, successful exits and claims, and partial-fill
+exits. See [auction validation](auction-validation.md).
 
-`test/fixtures/provenance.json` pins retained Oxley artifact and fixture hashes.
-The source build was Solidity 0.8.26, Cancun, optimizer 200. SDK ABI selectors,
-tuple layouts and events are checked against that build's full ABI.
+## Provenance
 
-The optional 0x helper was exercised against unmodified BASIC and utility source
-at commit `0148a16f3f90ee09ac5f56c8da17f230f5fa5282`. Its isolated test executor
-uses Solidity 0.8.34, Osaka and Anvil 1.7.1; it replaces upstream abstract context
-with a fixture and ordinary funding/final settlement. Full 0x Permit2, signed
-meta-transactions, deployment registry and Elysium chain-specific executor are
-not covered. BASIC calldata compatibility is not hosted API source acceptance.
+- [live-artifacts.json](live-artifacts.json): the live deployment record the bundled manifest is mapped
+  from (source path and sha256), and the compiler ABIs of the curve, bid router, bid hook and terms
+  registry (artifact, ABI file and Solidity source sha256). `artifacts.test.ts` checks the ABI file
+  hashes and `deployment.test.ts` checks the record hash and that the manifest is its exact mapping.
+- [auction-artifacts.json](auction-artifacts.json): the vendor continuous clearing auction (published ABI
+  and fixture) and the retained scaffolding fixtures used by the EVM suite, each sha256-pinned.
+  `test/fixtures/provenance.json` pins the retained fee router and test token the same way.
 
-`npm run build:test-executor` rebuilds that fixture from the vendored source.
-The public runtime has no Solidity compiler or test dependency. No protocol
-contract, remote deployment, wallet policy, funded transaction or external source
-configuration was changed during the original October 13 SDK validation.
+## Trading And Quote Checks
 
-The mainnet manifest is intentionally incomplete because mainnet chain/token/
-deployment information is unavailable. Supply the reviewed values, verify the
-graph, and run the provider's normal source-acceptance checks at launch. The
-public npm registry was not updated by the October 13 validation run. Current
-distribution status is tracked in the GitHub release notes.
+- Quotes come from the curve's own views at one pinned block, need no balance or allowance, and are
+  independent of any off-chain price. A quote with no executable output is refused.
+- A quote batch caches market validation within its block. For a warm single-market batch of 64 samples
+  the SDK performs 64 quote reads, three shared market reads, one chain read and two block reads, with
+  at most four samples in flight. No latency or throughput guarantee is asserted.
+- Calldata, approvals and quotes imply no funded action. The SDK never signs or sends; `checkSwap` with
+  `simulate` set runs only when the caller already holds the balance, approval and accepted terms.
+- Indexed-data checks are in [data validation](data-validation.md).
+
+## Limits
+
+- No funded transaction has been sent by these SDK paths, and none is implied.
+- Not mainnet-ready: [mainnet inputs](mainnet.md) lists what a reviewed mainnet manifest still needs.
+- No 0x hosted-route acceptance. BASIC calldata is checked offline (amount at byte offset 36); no BASIC
+  route is settled on an executor in this repository, and calldata compatibility is not source acceptance.
+- No real-bytecode curve settlement test exists for this release: the Gen10 creation bytecode is not in
+  this repository, so the earlier real-bytecode curve and 0x BASIC settlement test was removed.
+- The registry and controller compiler ABIs are not shipped. Their typed subsets are therefore not
+  cross-checked against compiled ABIs here; only the curve, bid router, bid hook, terms registry and
+  vendor auction are, plus the adapter against its retained fixture.
+- Auction transactions are executed locally only through retained scaffolding, not the deployed Gen10 router,
+  hook or adapter. Dynamic Bid and rebid preparation is tested against a modelled hook and auction.

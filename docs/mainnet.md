@@ -1,71 +1,72 @@
 # Mainnet Inputs
 
-The same SDK runs against the final USDC graph. RPC URLs stay outside the manifest
-so providers can use their own infrastructure without distributing credentials.
-The template is deliberately invalid while fields are missing; no guessed chain,
-testnet fallbacks or fake deployment addresses are supplied.
+The SDK supports one contract release shape, Gen10, and mainnet is a fresh deployment of it on
+Elysium mainnet, bound to that chain's USDC. `deployments/mainnet.template.json` has the same fields as
+`deployments/elysium-testnet.json`. It is deliberately invalid until every placeholder is replaced, so
+`parseDeployment` throws on it: no guessed chain, no testnet fallback and no fake address is supplied.
+There is no fallback between networks. A mainnet manifest that names chain `99801` or the testnet
+Oxy-USDC address is refused with `TESTNET_ON_MAINNET`, so testnet bindings cannot be used on mainnet.
+RPC URLs stay outside the manifest, so a provider uses its own endpoint and credentials.
 
-| Field | Required value | Owner |
-| --- | --- | --- |
-| `releaseId` | Immutable Oxley mainnet release identifier | Oxley |
-| `chainId` | Official Elysium mainnet chain ID, not `99801` | Elysium/Oxley |
-| `startBlock` | Decimal block number of selected curve deployment | Oxley |
-| `curve.address` | Verified USDC-bound ReserveCurveVNext-compatible contract | Oxley |
-| `curve.runtimeCodeHash` | Keccak-256 of deployed runtime, including immutables | Oxley |
-| `registry.address`, `runtimeCodeHash` | Mainnet auction registry and runtime identity | Oxley |
-| `quoteToken.address`, `runtimeCodeHash` | Authoritative Elysium USDC contract/proxy and runtime | Elysium/Oxley |
-| `quoteToken.decimals`, `symbol` | `6`, `USDC` | Fixed SDK requirement |
-| `auctionController` | Controller registering this release's auction markets | Oxley |
-| RPC transport | Working Elysium mainnet RPC endpoint | Oxley or provider |
-| Source verification links | Mainnet verified curve and registry; token identity provenance | Oxley |
-| Active market | Coin and market ID after successful auction settlement | Oxley/market creator |
+## What Oxley Supplies
 
-## Auction And Data Bindings
+Every `null` and `REPLACE_WITH_*` value in the template, all from the reviewed mainnet release:
 
-Auction participation additionally requires `auctionBindings` from the reviewed
-release: `controllerRuntimeCodeHash`, `bidRouter.address/runtimeCodeHash` and
-`adapter.address/runtimeCodeHash`. Use `parseAuctionDeployment` and the auction
-client to verify these alongside the controller, registry, token and on-chain
-auction bindings. The trading template alone does not supply these extra pins.
-See [auction integration](auctions.md). Mainnet auction execution needs its own
-acceptance checks; funded swap tests do not prove bid/refund/claim behavior there.
+| Field | Value |
+| --- | --- |
+| `releaseId`, `status` | Immutable release identifier and a non-empty release status |
+| `chainId` | Official Elysium mainnet chain ID (a positive integer, not `99801`) |
+| `startBlock` | Decimal-string block at which the graph exists; the SDK refuses earlier blocks |
+| `curve`, `registry` | `address` and `runtimeCodeHash` of the mainnet curve and registry |
+| `quoteToken` | `address` and `runtimeCodeHash` of the authoritative Elysium USDC contract |
+| `auctionController` | Address of the controller that registers this release's auctions |
+| `termsRegistry` | `address` and `runtimeCodeHash` of the terms registry the curve and hook enforce |
+| `auctionBindings.controllerRuntimeCodeHash` | Runtime hash of the controller |
+| `auctionBindings.bidRouter`, `adapter`, `bidHook`, `exposureHelper` | `address` and `runtimeCodeHash` of each |
 
-Auction creation additionally requires `launchBindings.creatorAccountFactory`,
-`entryController` and `bondEscrow`, each with `address` and `runtimeCodeHash`, plus
-decimal-string `launchFeeBaseUnits` and `deployerBondWei`. `parseLaunchDeployment`
-rejects placeholders; the launch client verifies graph bindings, actual fee/bond,
-account ownership and public launch status. The supported controller's bond is
-0.5 native units. A changed launch interface or bond policy requires a reviewed
-SDK update, not a guessed configuration. See [launch integration](launch.md).
+A runtime hash is the Keccak-256 of the deployed runtime code, including immutables. Fixed by the SDK and
+already filled in: `schemaVersion` `1`, `network` `"mainnet"`, `quoteToken.symbol` `"USDC"` and
+`decimals` `6`, and `bidRules`, which must equal the compiled Dynamic Bid rules exactly. The nine
+contract addresses must be distinct.
 
-Indexed data requires an explicitly enabled mainnet API deployment and approved
-mainnet indexer, chain, release and USDC bindings. The existing public API serves
-testnet only; changing a frontend's `chainId` cannot switch its data source to
-mainnet. No mainnet endpoint or deployment address is promised by this package.
+Outside the manifest: a working Elysium mainnet RPC endpoint, mainnet source-verification links for each
+contract, the provenance of the token identity, and (once an auction succeeds) the coin and market ID.
 
-## Launch Validation
+## What The SDK Verifies
 
-Validate the reviewed manifest using `parseDeployment`, then call
-`verifyDeployment` over the actual mainnet RPC and discover the active market.
-Exercise `quote` and `checkSwap` with the actual caller. For proxies, separately
-verify implementation/admin provenance; unchanged proxy runtime does not pin its
-implementation. Source acceptance and a funded smoke swap remain launch checks.
+`parseDeployment` (offline): schema, positive chain ID, explicit network, decimal `startBlock`, an
+address and 32-byte hash for every pin, distinct addresses, USDC with six decimals on mainnet, the
+`TESTNET_ON_MAINNET` rule and the exact `bidRules` (`INVALID_BID_RULES`).
 
-No new pricing engine, custom 0x signer policy, authenticated taker getter or SDK
-rewrite is necessary for basic routing. If a later contract release changes an
-ABI or economic behavior, give it a new SDK/deployment compatibility version.
+`verifyDeployment` on the trading client, at one block, ending with a canonical-block check (`REORG`):
 
-Native HYPE remains operating gas paid by the relevant transaction submitter.
-Auction creators also fund the existing native operating bond, with unused-bond
-ownership and return rules preserved.
-It is not an alternative bid/trade payment asset or an SDK sponsorship budget.
+- the RPC chain ID is the manifest's and the block is at or after `startBlock`;
+- runtime code hash of the curve, registry, quote token and terms registry;
+- the curve's quote asset is the manifest token, the token has 6 decimals, and the curve's terms registry is the manifest's.
 
-## Newer Generations
+`verifyDeployment` on the auction client, at one block, ending with the same canonical-block check:
 
-A mainnet release on a newer curve additionally needs `generation` (`"gen3"`, `"gen8"`, `"gen9"` or `"gen10"`) and a
-`termsRegistry` pin (address and runtime hash) in the manifest; `parseDeployment` requires the pin
-for exactly those generations and checks the curve is bound to it. A Gen8, Gen9 or Gen10 auction manifest also
-needs `auctionBindings.bidHook` and `exposureHelper` pins and the exact `bidRules` record (see
-`deployments/elysium-testnet-gen8.json`). `createOxleyMarkets({ deployments })` accepts the reviewed
-mainnet manifests in place of the bundled testnet set; it never mixes chains.
+- chain ID and `startBlock` as above; runtime code hash of the bid router, adapter, registry, quote token and controller;
+- the controller names the pinned bid router, adapter, quote token and registry; the router names the adapter, the adapter names the controller, both name the quote token, and both name the same validation hook;
+- the bid hook, exposure helper and terms registry hashes match, the hook is bound to the pinned router, terms registry and exposure helper, and the controller's terms registry is the pinned one;
+- the hook's `MIN_BID_AMOUNT`, `TOKEN_CAP` and `MAX_PRICE_LEVELS` equal the compiled bid rules;
+- the controller's `MAX_FLOOR_PRICE_WAD` is `1e21` (a controller without that getter fails the read), its `minimumRaise()` is 30,000 USDC (`30,000e6` base units) and its `minimumGrossRaise()` is `30,303,030,303`.
 
+Mismatches throw `CHAIN_MISMATCH`, `CODE_MISMATCH`, `QUOTE_BINDING_MISMATCH`, `TERMS_BINDING_MISMATCH` or
+`AUCTION_BINDING_MISMATCH`. Each auction read also requires the deal to belong to this controller and
+USDC (`UNSUPPORTED_AUCTION`). The bid rules, floor cap and minimum raise are constants of this SDK, not
+manifest inputs: a mainnet release with other values needs a reviewed SDK update, not a manifest edit.
+
+## Token And Launch Checks
+
+For a proxy token such as USDC, the pinned proxy runtime hash fixes the proxy's code only. It is not proof
+that the implementation or admin cannot change, so verify implementation and admin provenance separately.
+
+Before launch, parse the reviewed manifest, run both clients' `verifyDeployment` over the actual mainnet
+RPC, read the first auction with `getAuction` and a real wallet with `getDynamicBidLimits`, and exercise
+`quote` and `checkSwap` with the actual caller once a market exists. Source acceptance and a funded smoke
+transaction remain launch checks; nothing in this package substitutes for them.
+
+Indexed data needs an explicitly enabled mainnet API deployment with approved indexer, chain, release and
+USDC bindings. The public API serves testnet only, and changing a frontend's `chainId` cannot switch its data
+source. See [data API](data-api.md) and [auction integration](auctions.md).

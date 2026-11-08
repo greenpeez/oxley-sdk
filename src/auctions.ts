@@ -1,81 +1,36 @@
 import type { Address, Hex } from "viem";
 import { ccaAuctionAbi } from "./auction-abis.js";
 import { buildAuctionClaim, buildAuctionRefund, type PartialFillHints } from "./auction-transactions.js";
-import { address, check, deploymentGeneration, hash, parseDeployment, uint } from "./validation.js";
-import { GEN8_BID_RULES } from "./gen8-bid-rules.js";
-import { GEN8_FAMILY_LABELS, GEN8_FAMILY_NAMES, isGen8Family } from "./gen8-family.js";
+import { parseDeployment } from "./deployment.js";
+import { address, check, uint } from "./validation.js";
 import { createAuctionContext } from "./auction-context.js";
 import { createAuctionReader } from "./auction-state.js";
-import { createBidAllowanceReader } from "./auction-breadth.js";
-import { createBidPreparer } from "./auction-bid.js";
-import { createDynamicWallet } from "./auction-gen8-wallet.js";
-import { createDynamicBidPreparer } from "./auction-gen8-bid.js";
-import type { ContractPin, Deployment, RpcClient, Transaction } from "./types.js";
-export { buildAuctionBid, buildAuctionBidApprovals, buildAuctionClaim, buildAuctionRefund } from "./auction-transactions.js";
-export type { AuctionBidInput, PartialFillHints } from "./auction-transactions.js";
+import { createDynamicWallet } from "./auction-wallet.js";
+import { createDynamicBidPreparer } from "./auction-bid.js";
+import type { RpcClient, Transaction } from "./types.js";
+export { buildAuctionBidApprovals, buildAuctionClaim, buildAuctionRefund } from "./auction-transactions.js";
+export type { PartialFillHints } from "./auction-transactions.js";
 export * from "./auction-abis.js";
-export * from "./gen2-abis.js";
-export * from "./gen3-abis.js";
-export * from "./gen8-abis.js";
-export * from "./gen9-abis.js";
-export { buildDynamicBid, buildDynamicRebid, encodeBidWitnesses, decodeBidWitnesses, type BidWitness, type DynamicBidInput } from "./gen8-bid-transactions.js";
-export { GEN8_MIN_BID, GEN8_TOKEN_CAP, GEN8_MAX_LIVE_BIDS, GEN8_MAX_WALLET_BIDS, GEN8_MAX_PRICE_LEVELS, GEN8_BID_RULES, ACCEPTED_BID_FEE_BPS,
+export { buildDynamicBid, buildDynamicRebid, encodeBidWitnesses, decodeBidWitnesses, type BidWitness, type DynamicBidInput } from "./bid-transactions.js";
+export { MIN_BID, TOKEN_CAP, MAX_LIVE_BIDS, MAX_WALLET_BIDS, MAX_PRICE_LEVELS, BID_RULES, ACCEPTED_BID_FEE_BPS,
   acceptedBidFee, bidDebit, affordableBid, walletCeiling, walletAllowance, liveBids, bidsRemaining, maximumNewBid, bidRefusal, alignBidPrice,
-  type Gen8Position, type Gen8Refusal, type Gen8WalletLimits } from "./gen8-bid-rules.js";
-export { witnessFor, normalizeCheckpoints, type Checkpoint, type WitnessBid } from "./gen8-witnesses.js";
-export type { DynamicBidLimits } from "./auction-gen8-wallet.js";
-export type { DynamicBidRequest, DynamicRebidRequest } from "./auction-gen8-bid.js";
+  type BidPosition, type BidRefusal, type WalletLimits } from "./bid-rules.js";
+export { MAX_FLOOR_PRICE_WAD, MINIMUM_NET_RAISE, MINIMUM_GROSS_RAISE } from "./controller-rules.js";
+export { witnessFor, normalizeCheckpoints, type Checkpoint, type WitnessBid } from "./witnesses.js";
+export type { DynamicBidLimits } from "./auction-wallet.js";
+export type { DynamicBidRequest, DynamicRebidRequest } from "./auction-bid.js";
 export { decodeOxleyRevert, type OxleyRevert, type OxleyRevertName } from "./revert.js";
 
-const SUPPORTED = new Intl.ListFormat("en").format(["flat-fee", "Gen2", ...GEN8_FAMILY_LABELS]);
-export interface AuctionDeployment extends Deployment {
-  auctionBindings: { controllerRuntimeCodeHash: Hex; bidRouter: ContractPin; adapter: ContractPin;
-    /** Gen8 family only: the Dynamic Bids hook and its exposure helper. */
-    bidHook?: ContractPin; exposureHelper?: ContractPin };
-  /** Gen8 family only: the exact compiled bid rules (shared by Gen8, Gen9 and Gen10); any other value is refused. */
-  bidRules?: typeof GEN8_BID_RULES;
-}
-function familyBindings(deployment: Deployment, pins: AuctionDeployment["auctionBindings"], rules: unknown): ContractPin[] {
-  if (!isGen8Family(deploymentGeneration(deployment))) {
-    check(!pins.bidHook && !pins.exposureHelper && rules === undefined, "INVALID_DEPLOYMENT", `Bid hook, exposure helper and bid rules belong to ${GEN8_FAMILY_NAMES}`);
-    return [];
-  }
-  check(pins.bidHook && pins.exposureHelper, "AUCTION_BINDINGS_REQUIRED", `${GEN8_FAMILY_NAMES} needs the bid hook and exposure helper pins`);
-  check(!!rules && typeof rules === "object" && Object.keys(rules).length === Object.keys(GEN8_BID_RULES).length
-    && Object.entries(GEN8_BID_RULES).every(([key, value]) => (rules as Record<string, unknown>)[key] === value),
-  "INVALID_BID_RULES", `The manifest's bid rules must be exactly the compiled ${GEN8_FAMILY_NAMES} rules`);
-  for (const pin of [pins.bidHook, pins.exposureHelper]) { address(pin.address); hash(pin.runtimeCodeHash); }
-  return [pins.bidHook, pins.exposureHelper];
-}
-export function parseAuctionDeployment(input: unknown): AuctionDeployment {
-  const deployment = parseDeployment(input);
-  // Gen3 bids are not supported: its router and hook take other arguments, and no Gen3 auction accepts new bids.
-  check(deploymentGeneration(deployment) !== "gen3", "UNSUPPORTED_GENERATION", `The auctions client supports ${SUPPORTED} deployments`);
-  const { auctionBindings: pins, bidRules } = input as AuctionDeployment;
-  check(pins && typeof pins === "object", "AUCTION_BINDINGS_REQUIRED", "Reviewed auction runtime pins are required");
-  hash(pins.controllerRuntimeCodeHash);
-  for (const pin of [pins.bidRouter, pins.adapter]) {
-    check(pin && typeof pin === "object", "AUCTION_BINDINGS_REQUIRED", "Router and adapter pins required");
-    address(pin.address); hash(pin.runtimeCodeHash);
-  }
-  const extra = familyBindings(deployment, pins, bidRules);
-  const addresses = [deployment.auctionController, pins.bidRouter.address, pins.adapter.address, deployment.quoteToken.address,
-    deployment.registry.address, ...extra.map(pin => pin.address), ...deployment.termsRegistry ? [deployment.termsRegistry.address] : []];
-  check(new Set(addresses.map(a => a.toLowerCase())).size === addresses.length, "INVALID_DEPLOYMENT", "Auction contracts and quote token must be distinct");
-  return Object.freeze({ ...deployment, auctionBindings: Object.freeze({ ...pins,
-    bidRouter: Object.freeze({ ...pins.bidRouter }), adapter: Object.freeze({ ...pins.adapter }),
-    ...(extra.length ? { bidHook: Object.freeze({ ...extra[0]! }), exposureHelper: Object.freeze({ ...extra[1]! }) } : {}) }),
-  ...(bidRules ? { bidRules: Object.freeze({ ...bidRules }) } : {}) });
-}
+/**
+ * Unsigned auction transactions for one reviewed deployment: wallet limits, Dynamic Bids and rebids, exits (refunds) and token claims.
+ * Every preparation verifies the deployment at one block, simulates where it can and never signs or sends.
+ */
 export function createOxleyAuctionClient(options: { publicClient: RpcClient; deployment: unknown }) {
-  const rpc = options.publicClient, deployment = parseAuctionDeployment(options.deployment);
+  const rpc = options.publicClient, deployment = parseDeployment(options.deployment);
   const context = createAuctionContext(rpc, deployment);
   const { anchor, canonical, verifyAt } = context;
   const auctions = createAuctionReader(context);
   const { auctionAt, getAuction } = auctions;
-  const allowances = createBidAllowanceReader(context, auctions);
-  const { getBidAllowance } = allowances;
-  const prepareBid = createBidPreparer(context, auctions, allowances);
   const wallet = createDynamicWallet(context, auctions);
   const { getDynamicBidLimits } = wallet;
   const { prepareDynamicBid, prepareDynamicRebid } = createDynamicBidPreparer(context, auctions, wallet);
@@ -98,8 +53,9 @@ export function createOxleyAuctionClient(options: { publicClient: RpcClient; dep
     await canonical(at);
     return { ...at, ...auction, transaction, bidId: input.bidId, owner: bid.owner, simulated: true as const };
   }
-  return { deployment, verifyDeployment, getAuction, getBidAllowance, prepareBid, getDynamicBidLimits, prepareDynamicBid, prepareDynamicRebid,
+  return { deployment, verifyDeployment, getAuction, getDynamicBidLimits, prepareDynamicBid, prepareDynamicRebid,
     prepareClaim: (input: { dealId: Hex; bidId: bigint; caller: Address }) => recovery(input, true),
     prepareRefund: (input: { dealId: Hex; bidId: bigint; caller: Address; partialFill?: PartialFillHints }) => recovery(input, false),
   };
 }
+export type OxleyAuctionClient = ReturnType<typeof createOxleyAuctionClient>;

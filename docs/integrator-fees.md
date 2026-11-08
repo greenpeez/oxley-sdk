@@ -1,16 +1,21 @@
 # Integrator Fees
 
-Available since `@oxley/sdk@0.6.0-next.1`. A wallet, aggregator or app that routes Oxley
-trades can take its own fee in Oxley's quote asset (Oxy-USDC on testnet, USDC on mainnet) on
-top of the protocol's fees. The contracts have no integrator-fee field and the SDK adds none:
-the fee is an ordinary token transfer that travels with the trade in one call batch. It never
-touches the curve, the protocol fees or the user's minimum output.
+A wallet, aggregator or app that routes Oxley trades can take its own fee in Oxley's quote
+asset (Oxy-USDC on testnet, USDC on mainnet) on top of the protocol's fees. The contracts have
+no integrator-fee field and the SDK adds none: the fee is an ordinary token transfer that
+travels with the trade in one call batch. It never touches the curve, the protocol fees or the
+user's minimum output.
 
 ```ts
-import { createOxleyMarkets } from '@oxley/sdk';
+import { createPublicClient, http } from 'viem';
+import { createOxleyClient, testnetDeployment } from '@oxley/sdk';
 
-const markets = createOxleyMarkets({ publicClient });
-const prepared = await markets.prepareSwapWithFee({
+const sdk = createOxleyClient({
+  deployment: testnetDeployment,
+  publicClient: createPublicClient({ transport: http('https://testnet-rpc.elysium.kinetiq.xyz') }),
+});
+const { market } = await sdk.getMarket(marketId);
+const prepared = await sdk.prepareSwapWithFee({
   marketId, tokenIn: market.quoteToken, tokenOut: market.coin,
   amountIn: 10_000_000n,          // buy: the user's TOTAL spend, 10 Oxy-USDC, fee included
   caller: wallet, slippageBps: 100,
@@ -22,7 +27,7 @@ prepared.calls; // ordered: fee-transfer, [approve-reset], approve, trade
 prepared.spend; // { token: quote token, amount: 10_000_000n }
 prepared.receive; // { token: coin, expected, minimum }   (coins; the fee is paid on top of them)
 
-const ready = await markets.checkSwapWithFee(prepared); // re-quote and re-verify every call
+const ready = await sdk.checkSwapWithFee(prepared); // re-quote and re-verify every call
 // Wallets with EIP-5792 support:
 await provider.request(prepared.batch);   // { method: 'wallet_sendCalls', params: [...] }
 ```
@@ -55,8 +60,8 @@ await provider.request(prepared.batch);   // { method: 'wallet_sendCalls', param
 
 Refused before any quote or signature: `feeBps` that is not an integer from 1 to
 `MAX_INTEGRATOR_FEE_BPS` (100); an invalid or zero `feeRecipient`; a recipient that is the
-curve, the quote token, the market's coin or any contract in the deployment manifest
-(registry, controller, terms registry, bid router, adapter, hook); a zero or oversize
+curve, the quote token, the market's coin or any address in the deployment manifest
+(registry, controller, terms registry, bid router, adapter, hook, exposure helper); a zero or oversize
 `amountIn`; a lifetime outside 1 to 3600 seconds. A fee recipient equal to the caller is allowed
 (for example when testing with one wallet). For no fee, use `prepareSwap`.
 
@@ -101,6 +106,7 @@ amount (net for buys) and `options.amountIn` is the user's total input. A mismat
 
 Fees apply to the direct, self-custodied swap path where the user's own wallet sends the calls.
 They are not part of the 0x BASIC action, where the provider's executor is the immediate caller
-(see [0x routing](0x.md)). Gen3 and Gen8 curves also require the user to have accepted the
-terms; see [terms](markets.md#terms). The SDK does not sign, submit or custody anything, and the
-integrator is responsible for disclosing its fee to the user.
+(see [0x routing](0x.md)). The curve also requires the user to have accepted the terms once
+the registry enforces them; see [terms](markets.md#terms). The SDK does not sign, submit or
+custody anything, and the integrator is responsible for disclosing its fee to the user.
+Example: [integrator-fee.ts](../examples/integrator-fee.ts).

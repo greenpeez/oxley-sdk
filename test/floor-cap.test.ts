@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BaseError, RawContractError, encodeErrorResult, keccak256, slice, toHex, type Hex } from "viem";
-import { decodeOxleyRevert, GEN9_MAX_FLOOR_PRICE_WAD, GEN8_FAMILY, launchFloorCapAbi as fromIndex } from "../src/index.js";
+import { decodeOxleyRevert, MAX_FLOOR_PRICE_WAD, launchFloorCapAbi as fromIndex } from "../src/index.js";
 import { launchFloorCapAbi, oxleyRevertAbi } from "../src/abis.js";
 import { launchFloorCapAbi as fromAuctions } from "../src/auctions.js";
 import { launchFloorCapAbi as fromLaunch } from "../src/launch.js";
 import { addr } from "./support/chain.js";
 
 const selector = (signature: string) => slice(keccak256(toHex(signature)), 0, 4);
-const floor = 2n * 10n ** 21n, maximum = GEN9_MAX_FLOOR_PRICE_WAD;
+const floor = 2n * 10n ** 21n, maximum = MAX_FLOOR_PRICE_WAD;
 const tooHigh = (args: readonly [bigint, bigint] = [floor, maximum]): Hex => encodeErrorResult({ abi: launchFloorCapAbi, errorName: "FloorPriceAboveMaximum", args });
 
 test("the floor cap fragment is exactly the owner-given signature and getter, exported from every entry point", () => {
@@ -20,9 +20,9 @@ test("the floor cap fragment is exactly the owner-given signature and getter, ex
   assert.equal(tooHigh().slice(0, 10), selector("FloorPriceAboveMaximum(uint256,uint256)"));
   assert.equal(encodeErrorResult({ abi: launchFloorCapAbi, errorName: "FloorPriceAboveMaximum", args: [1n, 2n] }).length, 10 + 128);
   assert.equal(fromIndex, launchFloorCapAbi); assert.equal(fromAuctions, launchFloorCapAbi); assert.equal(fromLaunch, launchFloorCapAbi);
-  // The released revert set is untouched, so Gen8 decoding and its compiled-ABI evidence do not change.
+  // The compiled-ABI error set is untouched: the floor cap error is decoded from its own fragment.
   assert.ok(!(oxleyRevertAbi as readonly { type: string; name?: string }[]).some(item => item.name === "FloorPriceAboveMaximum"));
-  assert.deepEqual([GEN8_FAMILY.gen8.maxFloorPriceWad, GEN8_FAMILY.gen9.maxFloorPriceWad, GEN8_FAMILY.gen10.maxFloorPriceWad, maximum], [undefined, 10n ** 21n, 10n ** 21n, 10n ** 21n]);
+  assert.equal(maximum, 10n ** 21n);
 });
 test("FloorPriceAboveMaximum decodes from raw data and wallet or RPC error shapes into a USDC floor message", () => {
   const data = tooHigh();
@@ -34,7 +34,6 @@ test("FloorPriceAboveMaximum decodes from raw data and wallet or RPC error shape
     assert.ok(Object.isFrozen(decoded) && Object.isFrozen(decoded.args));
   }
   assert.match(decodeOxleyRevert(data, { quoteSymbol: "Oxy-USDC" })!.message, /^The Oxy-USDC floor price is above the maximum/);
-  for (const generation of ["gen8", "gen9", "gen10"] as const) assert.equal(decodeOxleyRevert(data, { generation })?.name, "FloorPriceAboveMaximum", generation);
   // The limit in the message is the revert's own second argument, not the SDK's mirror of it.
   assert.match(decodeOxleyRevert(tooHigh([5n, 3n]))!.message, /at most 3 /);
 });
@@ -44,13 +43,10 @@ test("anything that is not a complete FloorPriceAboveMaximum is not decoded as o
     assert.equal(decodeOxleyRevert(other)?.name, undefined, String(other));
   }
 });
-test("shared errors keep their per-generation wording and Gen9 and Gen10 word WalletCapExceeded like Gen8", () => {
-  const cap = encodeErrorResult({ abi: oxleyRevertAbi, errorName: "WalletCapExceeded", args: [addr(9), 60_000_000_000n, 5_050_505_051n] });
-  const message = (generation?: "gen2" | "gen3" | "gen8" | "gen9" | "gen10") => decodeOxleyRevert(cap, { generation })!.message;
-  assert.equal(message("gen8"), "You can bid up to 5050.505051 USDC more on this auction");
-  assert.equal(message("gen9"), message("gen8")); assert.equal(message("gen10"), message("gen8"));
-  // Gen10's opening ceiling is $3,030.30 (ceil(30,303,030,303 / 10)); the wording is the remaining allowance the revert itself carries.
-  const gen10 = encodeErrorResult({ abi: oxleyRevertAbi, errorName: "WalletCapExceeded", args: [addr(9), 60_000_000_000n, 3_030_303_031n] });
-  assert.equal(decodeOxleyRevert(gen10, { generation: "gen10" })!.message, "You can bid up to 3030.303031 USDC more on this auction");
-  assert.match(message("gen3"), /until this auction has broad support/); assert.equal(message(), message("gen2"));
+test("WalletCapExceeded names the wallet's remaining room, in the quote symbol it is given", () => {
+  const cap = (remaining: bigint) => encodeErrorResult({ abi: oxleyRevertAbi, errorName: "WalletCapExceeded", args: [addr(9), 60_000_000_000n, remaining] });
+  // The opening ceiling is ceil(30,303,030,303 / 10); the wording is the remaining allowance the revert itself carries.
+  assert.equal(decodeOxleyRevert(cap(3_030_303_031n))!.message, "You can bid up to 3030.303031 USDC more on this auction");
+  assert.equal(decodeOxleyRevert(cap(3_030_303_031n), { quoteSymbol: "Oxy-USDC" })!.message, "You can bid up to 3030.303031 Oxy-USDC more on this auction");
+  assert.equal(decodeOxleyRevert(cap(0n))!.message, "This wallet has reached its limit on this auction");
 });

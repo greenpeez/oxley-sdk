@@ -1,7 +1,7 @@
 {
   "name": "@oxley/sdk",
-  "version": "0.6.0-next.3",
-  "description": "Oxley market data, quotes, swaps (with optional integrator fees), terms and unsigned auction launch, bid, claim and refund transactions across the flat-fee, Gen3 and Gen8 generations and the Gen8 redeployments Gen9 and Gen10",
+  "version": "0.7.0-next.0",
+  "description": "Oxley Gen10 auctions on Elysium: market data, quotes, swaps (with optional integrator fees), terms, Dynamic Bids and rebids, and claim and refund transactions, as unsigned calldata for apps, bots and AI agents",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -12,7 +12,7 @@
   "bugs": {
     "url": "https://github.com/greenpeez/oxley-sdk/issues"
   },
-  "keywords": ["oxley", "elysium", "usdc", "dex", "aggregator", "0x"],
+  "keywords": ["oxley", "elysium", "usdc", "auctions", "dynamic-bids", "ai-agents", "dex", "aggregator", "0x"],
   "packageManager": "pnpm@10.32.1",
   "sideEffects": false,
   "engines": {
@@ -43,32 +43,12 @@
       "types": "./dist/launch.d.ts",
       "import": "./dist/launch.js"
     },
-    "./abis/creator-account.json": "./abis/ElysiumCreatorAccount.json",
-    "./abis/creator-account-factory.json": "./abis/ElysiumCreatorAccountFactory.json",
-    "./abis/auction-controller.json": "./abis/ElysiumBondedCcaLaunchControllerVNext.json",
-    "./abis/auction-bid-router.json": "./abis/ElysiumCcaBidRouterVNext.json",
-    "./abis/auction-adapter.json": "./abis/ElysiumUniswapCcaAdapter.json",
-    "./abis/cca-auction.json": "./abis/ContinuousClearingAuction.json",
-    "./abis/curve.json": "./abis/ElysiumReserveCurveVNext.json",
-    "./abis/registry.json": "./abis/ElysiumDealRegistry.json",
-    "./abis/gen2/auction-controller.json": "./abis/ElysiumBondedCcaLaunchControllerGen2.json",
-    "./abis/gen2/creator-account.json": "./abis/ElysiumCreatorAccountGen2.json",
-    "./abis/gen2/creator-account-factory.json": "./abis/ElysiumCreatorAccountFactoryGen2.json",
-    "./abis/gen2/bid-router.json": "./abis/ElysiumCcaBidRouterGen2.json",
-    "./abis/gen2/bid-hook.json": "./abis/ElysiumBreadthCcaBidHook.json",
-    "./abis/gen2/adapter.json": "./abis/ElysiumUniswapCcaAdapterGen2.json",
-    "./abis/gen2/curve.json": "./abis/ElysiumReserveCurveGen2.json",
-    "./abis/gen3/curve.json": "./abis/ElysiumReserveCurveGen3.json",
-    "./abis/terms-registry.json": "./abis/OxleyTermsRegistry.json",
-    "./abis/gen8/curve.json": "./abis/ElysiumCurveGen8.json",
-    "./abis/gen8/bid-router.json": "./abis/ElysiumCcaBidRouterGen8.json",
-    "./abis/gen8/bid-hook.json": "./abis/ElysiumDynamicBidHookGen8.json",
+    "./abis/curve.json": "./abis/curve.json",
+    "./abis/bid-router.json": "./abis/bid-router.json",
+    "./abis/bid-hook.json": "./abis/bid-hook.json",
+    "./abis/terms-registry.json": "./abis/terms-registry.json",
+    "./abis/cca-auction.json": "./abis/cca-auction.json",
     "./deployments/elysium-testnet.json": "./deployments/elysium-testnet.json",
-    "./deployments/elysium-testnet-gen2.json": "./deployments/elysium-testnet-gen2.json",
-    "./deployments/elysium-testnet-gen3.json": "./deployments/elysium-testnet-gen3.json",
-    "./deployments/elysium-testnet-gen8.json": "./deployments/elysium-testnet-gen8.json",
-    "./deployments/elysium-testnet-gen9.json": "./deployments/elysium-testnet-gen9.json",
-    "./deployments/elysium-testnet-gen10.json": "./deployments/elysium-testnet-gen10.json",
     "./deployments/mainnet.template.json": "./deployments/mainnet.template.json"
   },
   "files": [
@@ -92,7 +72,6 @@
     "test:evm": "node --import tsx --test test/integration/*.test.ts",
     "test:package": "node scripts/check-package.mjs",
     "bundle": "node scripts/bundle.mjs",
-    "build:test-executor": "node scripts/build-executor-fixture.mjs",
     "test:live": "node --import tsx scripts/check-testnet.ts",
     "test:live:auctions": "node --import tsx scripts/check-auctions-testnet.ts",
     "test:live:launch": "node --import tsx scripts/check-launch-testnet.ts",
@@ -105,7 +84,6 @@
   },
   "devDependencies": {
     "@types/node": "26.1.1",
-    "solc": "0.8.34",
     "tsx": "4.21.0",
     "typescript": "6.0.3"
   }

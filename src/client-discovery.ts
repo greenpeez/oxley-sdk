@@ -1,4 +1,5 @@
-import { parseAbiItem, type Address } from "viem";
+import { getAbiItem, type Address } from "viem";
+import { curveAbi } from "./curve-abis.js";
 import { address, check, hash, OxleyError, sameAddress, uint } from "./validation.js";
 import type { Anchor, DiscoveryCursor, Market } from "./types.js";
 import type { ClientContext } from "./client-context.js";
@@ -36,7 +37,7 @@ export function createDiscoveryReader(context: ClientContext, marketReader: Mark
     const checkpoint = await rpc.getBlock({ blockNumber: toBlock });
     check(checkpoint.hash, "INVALID_BLOCK", "Discovery requires a mined checkpoint");
     const logs = fromBlock > toBlock ? [] : await rpc.getLogs({ address: deployment.curve.address,
-      event: parseAbiItem("event MarketActivated(bytes32 indexed dealId,address indexed coin,address indexed creator,address reserveAsset,uint256 quoteSeed)"),
+      event: getAbiItem({ abi: curveAbi, name: "MarketActivated" }),
       args: options.coin ? { coin: options.coin } : undefined, fromBlock, toBlock, strict: true });
     const ids = [...new Set(logs.filter(log => !log.removed).map(log => log.args.dealId))];
     const markets: Market[] = [];

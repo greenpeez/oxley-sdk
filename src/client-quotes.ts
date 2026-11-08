@@ -1,5 +1,5 @@
-import { openingFeeCurveAbi } from "./gen3-abis.js";
-import { hasOpeningSurcharge, readCurveQuote } from "./curve-profile.js";
+import { openingFeeCurveAbi } from "./curve-abis.js";
+import { readCurveQuote } from "./curve.js";
 import { address, check, hash, sameAddress, uint } from "./validation.js";
 import type { Anchor, Market, Quote, QuoteRequest } from "./types.js";
 import type { ClientContext } from "./client-context.js";
@@ -10,7 +10,7 @@ export function createQuoteReader(context: ClientContext, marketReader: MarketRe
   const { tradableMarketAt } = marketReader;
   /** The quote view already charges the opening surcharge; the rate is read only so the quote can report it. */
   async function surchargeAt(market: Market, buy: boolean, anchor: Anchor) {
-    if (!buy || !market.generation || !hasOpeningSurcharge(market.generation)) return {};
+    if (!buy) return {};
     const openingSurchargeWad = await rpc.readContract({ address: market.curve, abi: openingFeeCurveAbi,
       functionName: "openingSurchargeWad", args: [market.id], blockNumber: anchor.blockNumber });
     return { openingSurchargeWad };
@@ -27,11 +27,10 @@ export function createQuoteReader(context: ClientContext, marketReader: MarketRe
     check(buy || sell, "UNSUPPORTED_PAIR", "Only the market coin/USDC pair is supported");
     const side = buy ? "buy" : "sell";
     const [read, surcharge] = await Promise.all([
-      readCurveQuote(rpc, deployment, { id: market.id, side, amountIn: request.amountIn, caller: request.caller, blockNumber: anchor.blockNumber }),
+      readCurveQuote(rpc, deployment, { id: market.id, side, amountIn: request.amountIn, blockNumber: anchor.blockNumber }),
       surchargeAt(market, buy, anchor),
     ]);
     const { amountOut, feeAmount } = read;
-    check(read.collateralOut === 0n, "COLLATERAL_OUTPUT", "This sell includes a non-swap collateral redemption");
     check(amountOut > 0n, "ZERO_OUTPUT", "Quote has no executable output");
     return Object.freeze({ ...anchor, chainId: deployment.chainId, releaseId: deployment.releaseId, market,
       side, caller: request.caller, tokenIn: request.tokenIn, tokenOut: request.tokenOut,

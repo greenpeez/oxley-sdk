@@ -70,7 +70,7 @@ const client = (body: unknown, status = 200, headers: Record<string, string> = {
   quoteAsset: address, fetch: async () => Response.json(body, { status, headers }) });
 
 test("the client returns tip envelopes with sources, feeds, trade origins, exited bids and verified-binding identities intact", async () => {
-  const identity = { chainId: 99801, source: "verified-binding", releaseId: "elysium-auctions-gen3-aac49c62c3855f41", observedBlock: "100", observedBlockHash: hash,
+  const identity = { chainId: 99801, source: "verified-binding", releaseId: "elysium-auctions-gen10-1fa4ef2a98fd14ed", observedBlock: "100", observedBlockHash: hash,
     controller: { address, runtimeCodeHash: hash }, adapter: { address, runtimeCodeHash: hash }, curve: { address, runtimeCodeHash: hash }, quote: { address, runtimeCodeHash: hash } };
   const sources: DataSourceObservation[] = [{ feed: "current", ...tip() } as never, { feed: "legacy", ...prefix() } as never];
   const market = { dealId: id, mode: "reserve", coin: address, creator: owner, name: "Example", symbol: "TEST", launchedAt: now - 100, spotPriceWad: "5",

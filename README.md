@@ -1,50 +1,55 @@
 # Oxley SDK
 
-Public, provider-neutral TypeScript SDK for Oxley. The trading client discovers
-active post-auction markets from chain events, reads executable exact-input quotes and
-builds unsigned ERC-20 approvals and atomic buy/sell calldata. It runs in Node.js
-and browser applications using a caller-supplied viem public client.
+Public, provider-neutral TypeScript SDK for Oxley on Elysium. It supports one contract
+release, **Gen10**: Dynamic Bid auctions, the markets they create, and the swaps, quotes and
+terms of those markets. Everything is read from chain through a caller-supplied viem public
+client and returned as **unsigned** calldata; the SDK never signs, broadcasts or holds keys.
+It runs in Node.js 20+ and browser applications, with no Oxley API key, backend, callback,
+provider allowlist or Uniswap v4 hook.
 
-The trading client needs no Oxley API key, backend, signer, callback, provider allowlist, custom taker
-accessor, or Uniswap v4 hook. Providers keep their usual funding,
-transaction submission and final-recipient settlement. Fees are enforced by the
-contracts even when the SDK is bypassed.
-
-This repository contains the **Elysium SDK**, version `0.6.0-next.3`, as ESM with
-TypeScript declarations. It is a different API from the legacy `@oxley/sdk`
-`0.4.1` release. The Elysium release is the default `latest` channel. Its
-prerelease version does not imply mainnet readiness. It is not a drop-in upgrade
-for `@oxley/sdk/release` or `@oxley/sdk/evm` consumers; those integrations should
-remain pinned to `@oxley/sdk@0.4.1` until migrated.
-
-Install the Elysium SDK, including auction transactions and public data:
+This repository contains the **Elysium SDK**, version `0.7.0-next.0`, as ESM with
+TypeScript declarations. It is a breaking release: the earlier flat-fee, Gen2, Gen3, Gen8
+and Gen9 support, `createOxleyMarkets` and the launch client are gone (see the
+[changelog](CHANGELOG.md) for the removals and an old to new table of renamed exports).
+It is a different API from the legacy `@oxley/sdk` `0.4.1` release, whose
+`@oxley/sdk/release` and `@oxley/sdk/evm` consumers should stay on `0.4.1`. The prerelease
+version does not imply mainnet readiness: the included manifest and public feeds are
+testnet only (chain id 99801), and mainnet bindings are pending.
 
 ```sh
 npm install @oxley/sdk
 ```
 
-The `/data` module was introduced in `0.5.0-next.1`; `/auctions` in
-`0.5.0-next.2`. Version `0.5.0-next.4` adds `/launch`: verified auction launch
-preparation, creator-account ABIs, exact launch-fee approvals and resumable stages.
-Version `0.6.0-next.0` adds opt-in [Gen2 auction support](#gen2-auctions-exact-duration-breadth-rule-trading-gate).
-Version `0.6.0-next.1` reaches [every current market](#current-markets) (flat-fee, Gen3 and Gen8), adds
-[terms acceptance](#terms), [integrator fees](#integrator-fees) and [Gen8 Dynamic Bids](docs/auctions.md#gen8-dynamic-bids).
-Version `0.6.0-next.2` adds `data.tokens()`: name, symbol, description, socials and image for any number of markets.
-Version `0.6.0-next.3` adds [Gen10](#current-markets), the Gen9 contracts with a $30,000 net minimum raise (Gen8 and Gen9: $50,000),
-now the generation new auctions launch on; Gen8 and Gen9 markets keep trading, bidding and claiming.
-Existing swap, data and bid/claim/refund APIs remain unchanged for the deployed flat-fee release.
-Mainnet bindings remain pending; the included manifest and public feeds are testnet only.
+## For AI Agents And Bots
+
+An agent can run the whole auction lifecycle with a public RPC and its own wallet:
+
+| Step | Call | Result |
+| --- | --- | --- |
+| Check the deployment | `auctions.verifyDeployment()` | Pins, bindings, bid rules, floor cap and minimum raise verified at one block |
+| Read limits | `auctions.getDynamicBidLimits({ dealId, owner })` | Wallet ceiling, allowance, live-bid slots, balance, terms standing, `maximumBid` |
+| Prepare a Dynamic Bid | `auctions.prepareDynamicBid({ dealId, caller, entered, maxPriceQ96 })` | Exact approvals and the bid transaction, with witnesses and a derived previous tick |
+| Simulate | the same call with `simulate: true` | The router call simulated from `caller` once balance and approvals exist |
+| Rebid | `auctions.prepareDynamicRebid({ ..., oldBidId })` | Exits one outbid bid and bids again in one transaction |
+| Refund | `auctions.prepareRefund({ dealId, bidId, caller, partialFill? })` | Unsigned exit, simulated; principal goes to the bid's owner |
+| Claim | `auctions.prepareClaim({ dealId, bidId, caller })` | Unsigned token claim, simulated, after the exit is confirmed |
+
+Each result carries structured errors (`OxleyError.code`, `details`) so an agent can branch
+without parsing text, and `decodeOxleyRevert` turns a wallet or RPC revert into a short
+reason. The agent signs and sends every transaction itself, confirms receipts, and prepares
+again from fresh chain state; a timeout is never proof that nothing was sent. Work through
+[the auction guide](docs/auctions.md) and its [example](examples/dynamic-bid.ts).
 
 ## Start Here
 
 - [Public Builders docs](https://oxley.fun/docs/builders) and [npm package](https://www.npmjs.com/package/@oxley/sdk).
+- Auction participation: [Dynamic Bids, rebids, claim and refund guide](docs/auctions.md) and examples ([bid and rebid](examples/dynamic-bid.ts), [exit and claim](examples/auction.ts)).
+- Trading the markets auctions create, terms and the opening surcharge: [markets](docs/markets.md).
 - Aggregators and exchanges: [provider handoff](docs/provider-handoff.md), [0x source guide](docs/0x.md), [mainnet requirements](docs/mainnet.md).
 - Wallets and apps adding their own fee: [integrator fees](docs/integrator-fees.md) and [example](examples/integrator-fee.ts).
-- Trading every current generation, terms and the opening surcharge: [current markets](docs/markets.md).
 - Frontend builders: [indexed data API](docs/data-api.md) and [polling example](examples/live-data.ts).
-- Auction participation: [bid, claim and refund guide](docs/auctions.md) and [example](examples/auction.ts).
-- Builders and AI agents launching auctions: [launch guide](docs/launch.md) and [example](examples/launch.ts).
-- Evidence: [validation overview](docs/validation.md), [launch tests](docs/launch-validation.md), [funded buy/sell results](docs/funded-swaps-2026-10-16.md), [auction tests](docs/auction-validation.md), [live data checks](docs/data-validation.md).
+- Launch floors: [launch floor rules](docs/launch.md) and [example](examples/launch-floor.ts).
+- Evidence: [validation overview](docs/validation.md), [auction tests](docs/auction-validation.md), [live data checks](docs/data-validation.md).
 
 ## Release Channel
 
@@ -61,160 +66,110 @@ Published version archives are immutable; older archives may still describe the
 release channel that applied when they were published. The registry's current
 dist-tags determine the default version.
 
-## Auction Launches
+## Entry Points
 
-`@oxley/sdk/launch` provides `createOxleyLaunchClient`, `quoteAuctionFloor`,
-`buildCreatorAccount` and `buildAuctionLaunch`, and the pure floor rule of the Gen8 family
-(`floorReachesMinimumRaise`, `minimumRaiseFloor`, `validateLaunchFloor`: the lowest floor that can raise a
-generation's minimum, $30,000 net on Gen10 and $50,000 on Gen8 and Gen9). `prepareLaunch(intent)` returns
-one simulated unsigned step: setup, allowance reset, exact fee approval, launch,
-or an already-completed result. Confirm each receipt and prepare again using the
-same persisted deal ID. `getLaunch({owner,dealId})` supports restart recovery.
+| Import | Contents |
+| --- | --- |
+| `@oxley/sdk` | Trading client (`createOxleyClient`), swaps and integrator fees, terms, opening-surcharge mirror, `parseDeployment`, `testnetDeployment`, `decodeOxleyRevert`, the raise constants and typed ABIs |
+| `@oxley/sdk/auctions` | `createOxleyAuctionClient`, Dynamic Bid and rebid builders, claim and refund builders, the bid-rule helpers and constants, typed auction ABIs |
+| `@oxley/sdk/launch` | Pure launch-floor rules (`validateLaunchFloor`, `minimumRaiseFloor`, `quoteAuctionFloor`); the SDK does not prepare launch transactions |
+| `@oxley/sdk/abis` | Every typed ABI subset |
+| `@oxley/sdk/0x` | `buildZeroExBasic`, the optional 0x BASIC source action |
+| `@oxley/sdk/data` | `createOxleyDataClient`: fetch-only client for the public indexed data API |
+| `@oxley/sdk/abis/*.json` | Full compiler ABIs: `curve`, `bid-router`, `bid-hook`, `terms-registry`, `cca-auction` |
+| `@oxley/sdk/deployments/*.json` | `elysium-testnet.json` (reviewed Gen10 testnet manifest) and `mainnet.template.json` |
 
-Launches use the verified creator-account factory and account. The creator pays
-the 1.5 Oxy-USDC testnet fee plus a separate 0.5 HYPE operating bond and gas;
-no sponsorship or native-asset bid/trade route is added. Wallet authorization,
-submission and durable transaction tracking remain with the builder or agent.
-Off-chain editable metadata is a separate workflow, not published by this module.
-See [launch terms, units, checks and recovery](docs/launch.md).
+## Auctions
 
-## Auction Transactions
-
-`@oxley/sdk/auctions` adds `createOxleyAuctionClient`, unsigned bid/claim/refund
-builders, exact fee-inclusive approvals, and typed auction ABIs. The client checks
-runtime pins and the controller/router/adapter/auction bindings using your RPC.
-It never signs, submits transactions, invents exit hints, or redirects payouts.
-
-- Bids target the accepted-bid router, not the auction controller or raw CCA entry.
-- Refund/exit and token-claim transactions target the auction resolved on-chain.
-- Partial-fill exits require explicit CCA checkpoint hints; confirm an exit before claiming.
-- The transaction caller owns a new bid. Refunds and claims always pay the recorded bid owner.
-
-See [auction integration](docs/auctions.md), [example](examples/auction.ts), and
-[auction validation](docs/auction-validation.md). Full compiler ABI JSON exports:
-`@oxley/sdk/abis/auction-controller.json`, `auction-bid-router.json`,
-`auction-adapter.json`, and `cca-auction.json` (all under `@oxley/sdk/abis/`).
-
-## Gen2 Auctions (Exact Duration, Breadth Rule, Trading Gate)
-
-Gen2 is the next auction contract generation. A manifest opts in with
-`"generation": "gen2"`; manifests without the field keep the flat-fee behaviour
-byte-for-byte. The same clients then add:
-
-- **Exact duration.** `prepareLaunch` samples the live block rate (up to 20,000
-  blocks, never before the manifest's `startBlock`), converts the creator's 1-24
-  hours with `auctionDurationBlocks`, checks the controller's `durationBounds(hours)`
-  and encodes `launchAuctionWithCommitmentAndExactDuration`. Supply `secondsPerBlock`
-  or `durationBlocks` to skip sampling. The 0.5 HYPE creator bond is unchanged.
-- **Breadth rule.** Each wallet's committed bid principal is capped at 10% of the
-  auction's minimum gross raise until the capped commitments cover that minimum
-  (at least ten wallets); then there is no per-wallet limit. The 0.1% bid fee is on
-  top of principal. The creator account and its owner cannot bid.
-  `getBidAllowance({ dealId, owner })` reports the hook state; `prepareBid` fails
-  closed with `WALLET_CAP_EXCEEDED` or `CREATOR_BID_NOT_ALLOWED` before simulation.
-- **Trading gate.** After settlement the curve stays closed until every successful
-  bid is delivered, or 10 minutes after activation at the latest.
-  `getTradingStatus(marketId)` returns `{ open, fallbackAt }`; quotes and swaps fail
-  closed with `TRADING_NOT_OPEN` while it is closed.
+`createOxleyAuctionClient` binds one reviewed deployment. Bids target the accepted-bid
+router and are checked by the per-wallet bid hook; the SDK reads the wallet's standing,
+builds one witness per stored bid, and refuses what the hook, router or auction would refuse
+before it returns a transaction.
 
 ```ts
 import { createPublicClient, http } from 'viem';
-import { createOxleyAuctionClient, decodeOxleyRevert } from '@oxley/sdk/auctions';
-import deployment from '@oxley/sdk/deployments/elysium-testnet-gen2.json'
-  with { type: 'json' };
+import { testnetDeployment } from '@oxley/sdk';
+import { createOxleyAuctionClient } from '@oxley/sdk/auctions';
 
-const publicClient = createPublicClient({ transport: http('https://testnet-rpc.elysium.kinetiq.xyz') });
-const auctions = createOxleyAuctionClient({ deployment, publicClient });
-const allowance = await auctions.getBidAllowance({ dealId, owner });
-// allowance.unlimited, or allowance.walletAllowance in six-decimal principal units
-try {
-  await auctions.prepareBid({ dealId, caller: owner, entered, maxPriceQ96, previousTick, deadline });
-} catch (error) {
-  // OxleyError codes, or a wallet/RPC revert decoded into a short message:
-  console.log(decodeOxleyRevert(error)?.message ?? error);
+const auctions = createOxleyAuctionClient({
+  deployment: testnetDeployment,
+  publicClient: createPublicClient({ transport: http('https://testnet-rpc.elysium.kinetiq.xyz') }),
+});
+const limits = await auctions.getDynamicBidLimits({ dealId, owner });
+if (limits.maximumBid >= limits.minimumBid) {
+  const prepared = await auctions.prepareDynamicBid({ dealId, caller: owner, entered: limits.minimumBid, maxPriceQ96 });
+  // prepared.approvals in order, then prepare again with simulate: true and send prepared.transaction.
 }
 ```
 
-**Planned addresses only.** `deployments/elysium-testnet-gen2.json` carries
-`"status": "planned-fork-addresses"`: addresses and runtime hashes from a local
-fork rehearsal, not a live deployment. Runtime-hash verification fails closed
-until those contracts exist on chain; a live Gen2 deploy replaces the file with
-its real addresses and `startBlock`. The flat-fee `elysium-testnet.json` stays the
-default profile. Full Gen2 ABIs are exported under `@oxley/sdk/abis/gen2/`
-(`auction-controller`, `creator-account`, `creator-account-factory`, `bid-router`,
-`bid-hook`, `adapter`, `curve`); source hashes are in [gen2-artifacts.json](docs/gen2-artifacts.json).
+- A bid is at least 20 USDC of principal; a 0.1% accepted-bid fee is charged on top.
+- A wallet holds at most 3 live bids and 12 bids in total per auction, up to 30,000,000 coins, and up to a ceiling that opens at $3,030.303031 and grows with other wallets' commitments.
+- The terms must be accepted first (`getTermsStatus`, `prepareAcceptTerms`); creators cannot bid on their own auction.
+- A rebid exits one outbid bid and bids again, once the auction has met its minimum raise.
+- Refunds and claims always pay the recorded bid owner, even when another account submits; partial-fill exits need explicit CCA checkpoint hints, and an exit must be confirmed before claiming.
+- Auctions succeed or fail by their minimum raise: a controller `minimumRaise()` of 30,000 USDC net (30,303,030,303 gross), a launch floor capped at 1e21 `floorPriceWad`.
 
-## Current Markets
+See [auction integration](docs/auctions.md) and [auction validation](docs/auction-validation.md).
 
-`createOxleyClient` binds one deployment. `createOxleyMarkets` holds one verified client per reviewed
-generation and routes every call to the curve that lists the market, resolved **on chain**:
+## Markets, Terms And Swaps
+
+Once an auction succeeds its coin trades on the Gen10 curve. `createOxleyClient` binds the same
+deployment, discovers active markets from `MarketActivated` events, reads executable exact-input
+quotes and builds unsigned ERC-20 approvals and atomic buy and sell calldata.
 
 ```ts
 import { createPublicClient, http } from 'viem';
-import { createOxleyMarkets } from '@oxley/sdk';
+import { createOxleyClient, testnetDeployment } from '@oxley/sdk';
 
-const markets = createOxleyMarkets({
+const sdk = createOxleyClient({
+  deployment: testnetDeployment,
   publicClient: createPublicClient({ transport: http('https://testnet-rpc.elysium.kinetiq.xyz') }),
 });
-const { market, entry } = await markets.resolveMarket(dealId); // entry.generation: 'flat-fee' | 'gen3' | 'gen8' | 'gen10' (| 'gen9' once its manifest is bundled)
-const swap = await markets.prepareSwap({ marketId: dealId, tokenIn: market.quoteToken, tokenOut: market.coin,
-  amountIn: 10_000_000n, caller: wallet, slippageBps: 50 });
+await sdk.verifyDeployment();
+const page = await sdk.discoverMarkets();
+// Persist page.cursor; keep requesting pages while page.hasMore is true.
+// No markets on a page does not mean there are no later activations.
+const market = page.markets[0];
+if (!market) throw new Error('Continue discovery until an active market is found');
+
+const swap = await sdk.prepareSwap({
+  marketId: market.id,
+  tokenIn: market.quoteToken,
+  tokenOut: market.coin,
+  amountIn: 10_000_000n, // 10 USDC (Oxy-USDC on testnet), six decimals
+  caller: '0xYOUR_WALLET_OR_ACTUAL_EXECUTOR_ADDRESS',
+  slippageBps: 50,
+  ttlSeconds: 300,
+});
+
+// For a directly funded caller:
+const funding = await sdk.checkSwap(swap);
+// Submit funding.approvals in order, wait for successful receipts, then requote.
+// checkSwap(freshSwap, true) simulates and estimates gas with real balances.
+// Sign and send freshSwap.transaction using the caller's existing wallet.
 ```
 
-| Generation | Curve | Markets on 2026-10-29 |
-| --- | --- | --- |
-| `flat-fee` | `0x18bf92514c0d749a017aaf69153442703e1a966b` | 8 (`deployments/elysium-testnet.json`) |
-| `gen3` | `0xb7e3e9b2ea74e3051f5c40ce7eb0486b0ab793d3` | 13 (`deployments/elysium-testnet-gen3.json`) |
-| `gen8` | `0x434fd4f556800634399b9f96a4d148de215458e5` | 0 so far; no longer the launch generation (`deployments/elysium-testnet-gen8.json`) |
-| `gen10` | `0x68926b5e1b479c1ba32fe8e87699dfe5cfe7bd91` | Start block 25237151, release `elysium-auctions-gen10-1fa4ef2a98fd14ed`; no market count recorded here; the current launch generation (`deployments/elysium-testnet-gen10.json`) |
+`quote()` accepts the same market, pair, input and caller fields without slippage and returns net
+`amountOut`, the USDC-denominated `feeAmount`, the opening surcharge rate on buys, and the source
+block and hash. It needs neither input balance nor allowance. `quoteMany()` samples up to 64 inputs
+at one block, four in flight at a time, preserving per-sample errors. RPC failures are not
+liquidity-zero results. Quotes are observations, not price reservations; deadline and minimum
+output are enforced at execution. Read [markets](docs/markets.md) for the curve interface, the
+trading gate that keeps a new market closed until its bids are delivered, the decaying opening
+surcharge and the market checks.
 
-`gen10` is the Gen9 contracts redeployed with one change, the launch controller's net minimum raise: **$30,000** (about a
-$101,000 starting market cap at the lowest floor) instead of the $50,000 of Gen8 and Gen9. Its runtime ABI is Gen9's, and it
-reuses Gen9's terms registry, so a wallet that accepted the terms on a Gen9 market is accepted on Gen10. It is the generation
-new auctions launch on; Gen8 and Gen9 markets keep trading, bidding and claiming.
-
-`gen9` (the Gen8 contracts redeployed with a launch floor cap) is supported by the SDK and runs beside Gen8. Its
-manifest `deployments/elysium-testnet-gen9.json` is not part of this bundle: pass a Gen9 manifest in
-`createOxleyMarkets({ deployments: [...testnetDeployments, gen9Manifest] })` to trade its markets.
-
-Each manifest is verified by runtime code hash and by the curve's own bindings (quote token, terms
-registry). Gen2 is not bundled (every one of its auctions failed, so it holds no market) and the
-older bonded-v2 curves, which hold the original PENELOPE, ODYSSEUS, RODEO and MINI markets, are
-not supported. Quotes come from each curve's own views and include the real fee, including the
-decaying opening surcharge on Gen3 and Gen8 buys (`quote.openingSurchargeWad`). A market is never guessed
-from a symbol or an API row: an optional data-API `deploymentIdentity` only selects the candidate.
-Read [current markets](docs/markets.md) for resolution rules, differences by generation, the trading gate
-and the surcharge. Existing `createOxleyClient`, `buildSwap` and `checkSwap` keep working for the flat-fee manifest.
-
-## Terms
-
-Gen3 and Gen8 curves require the caller to have accepted the Oxley terms once the bound registry
-enforces them (both testnet registries currently do not). `getTermsStatus({ marketId, account })`
-reports `{ enforced, accepted, requiredVersion, termsHash, uri }`, `prepareAcceptTerms` returns an unsigned,
-simulated `acceptTerms(version, termsHash)` (or `null`), `buildAcceptTerms` encodes it offline, and
-`checkSwap` returns `termsAccepted` and refuses to simulate before acceptance. Show the user the text at `uri`
+**Terms.** The curve and the bid hook require the caller to have accepted the Oxley terms once the
+bound registry enforces them. `getTermsStatus(account)` reports `{ enforced, accepted, requiredVersion,
+termsHash, uri }`, `prepareAcceptTerms({ account })` returns an unsigned, simulated
+`acceptTerms(version, termsHash)` (or `null`), `buildAcceptTerms` encodes it offline, and `checkSwap`
+returns `termsAccepted` and refuses to simulate before acceptance. Show the user the text at `uri`
 before they sign; see [terms](docs/markets.md#terms).
 
-## Integrator Fees
-
-`prepareSwapWithFee` adds your own fee, in the quote asset, to a direct trade without touching the
-protocol fees or the user's minimum output. It returns an ordered call batch for EIP-5792
-`wallet_sendCalls` (atomic only on wallets that support batching) and the same calls as a sequential
-fallback with its risk stated:
-
-```ts
-const prepared = await markets.prepareSwapWithFee({ marketId, tokenIn: market.quoteToken, tokenOut: market.coin,
-  amountIn: 10_000_000n, caller: wallet, slippageBps: 100, feeRecipient: treasury, feeBps: 50 });
-// Buy: fee transfer (0.05), exact approval of 9.95, buy with 9.95. prepared.fee.amount === 50_000n
-await markets.checkSwapWithFee(prepared); // re-quotes and re-verifies every call
-await provider.request(prepared.batch);   // wallet_sendCalls, atomicRequired by default
-```
-
-Buys pay the fee from the user's total spend first, approve exactly the net amount and trade it, so the quote and
-minimum are for the net amount. Sells trade first and then transfer a fee computed on the **guaranteed minimum**
-output (never the actual output), so the fee is always covered. `feeBps` is an integer from 1 to
-`MAX_INTEGRATOR_FEE_BPS` (100); the recipient cannot be zero, the curve, a token or an Oxley contract.
-Full semantics, rounding and the atomicity caveat: [integrator fees](docs/integrator-fees.md).
+**Integrator fees.** `prepareSwapWithFee` adds your own fee, in the quote asset, to a direct trade
+without touching the protocol fees or the user's minimum output. It returns an ordered call batch for
+EIP-5792 `wallet_sendCalls` (atomic only on wallets that support batching) and the same calls as a
+sequential fallback with its risk stated. `feeBps` is an integer from 1 to `MAX_INTEGRATOR_FEE_BPS`
+(100). Full semantics, rounding and the atomicity caveat: [integrator fees](docs/integrator-fees.md).
 
 ## Indexed Data
 
@@ -248,52 +203,7 @@ selection, numeric units, pagination, freshness, polling and release limitations
 The [frontend example](examples/live-data.ts) handles cancellation and cooldowns.
 These feeds are for display, **not transaction preparation or signing authority**.
 
-## Quote And Prepare
-
-```ts
-import { createPublicClient, http } from 'viem';
-import { createOxleyClient } from '@oxley/sdk';
-import deployment from '@oxley/sdk/deployments/elysium-testnet.json'
-  with { type: 'json' };
-
-const sdk = createOxleyClient({
-  deployment,
-  publicClient: createPublicClient({
-    transport: http('https://testnet-rpc.elysium.kinetiq.xyz'),
-  }),
-});
-await sdk.verifyDeployment();
-const page = await sdk.discoverMarkets();
-// Persist page.cursor; keep requesting pages while page.hasMore is true.
-// No markets on a page does not mean there are no later activations.
-const market = page.markets[0];
-if (!market) throw new Error('Continue discovery until an active market is found');
-
-const swap = await sdk.prepareSwap({
-  marketId: market.id,
-  tokenIn: market.quoteToken,
-  tokenOut: market.coin,
-  amountIn: 10_000_000n, // 10 USDC/Oxy-USDC, six decimals
-  caller: '0xYOUR_WALLET_OR_ACTUAL_EXECUTOR_ADDRESS',
-  slippageBps: 50,
-  ttlSeconds: 300,
-});
-
-// For a directly funded caller:
-const funding = await sdk.checkSwap(swap);
-// Submit funding.approvals in order, wait for successful receipts, then requote.
-// checkSwap(freshSwap, true) simulates and estimates gas with real balances.
-// Sign and send freshSwap.transaction using the caller's existing wallet.
-```
-
-`quote()` accepts the same market/pair/input/caller fields without slippage and
-returns net `amountOut`, USDC-denominated `feeAmount`, and the source block/hash.
-It needs neither input balance nor allowance. `quoteMany()` samples up to 64
-inputs at one block, four in flight at a time, preserving per-sample errors.
-RPC failures are not liquidity-zero results. Quotes are observations, not price
-reservations; deadline and minimum output are enforced at execution.
-
-### Independent Quotes And Minimums
+## Independent Quotes And Minimums
 
 Use `quote()` or `prepareSwap()` with your independently configured RPC and the
 reviewed deployment manifest, not an HTTP quote or an indexed-data response as
@@ -313,31 +223,27 @@ and reconcile it before retrying. A timeout is not proof that nothing was sent.
 
 | Method/export | Result |
 | --- | --- |
-| `parseDeployment(json)` | Validated, frozen network/token/contract configuration |
-| `createOxleyClient({publicClient,deployment})` | Independent RPC client; no hosted Oxley service |
-| `verifyDeployment()` | Chain, runtime hash, quote binding and decimals checks |
-| `discoverMarkets({cursor?,fromBlock?,toBlock?,pageSize?,coin?})` | Event-based page of active auction markets and canonical cursor |
+| `parseDeployment(json)` | Validated, frozen manifest: nine distinct pinned contracts and the exact bid rules |
+| `createOxleyClient({publicClient,deployment})` | Independent RPC trading client; no hosted Oxley service |
+| `verifyDeployment()` | Chain, runtime hash, quote binding, decimals and terms-registry binding checks |
+| `discoverMarkets({cursor?,fromBlock?,toBlock?,pageSize?,coin?})` | Event-based page of active markets and canonical cursor |
 | `getMarket(id, blockNumber?)` | Registry/curve-validated market and block identity |
-| `getTradingStatus(id, blockNumber?)` | Gen2 trading gate `{open, fallbackAt}`; flat-fee markets report `open: true` |
-| `quote(request)` | Exact-input quote for one market/pair/caller |
-| `quoteMany(requests, blockNumber?)` | Ordered settled results at the same block |
+| `getTradingStatus(id, blockNumber?)` | Trading gate `{open, fallbackAt}` |
+| `quote(request)`, `quoteMany(requests, blockNumber?)` | Exact-input quote for one market/pair, or ordered settled results at one block |
 | `prepareSwap({...request,slippageBps,ttlSeconds?})` | Fresh quote, transaction, required approval, output/reward receiver |
-| `checkSwap(swap, simulate?)` | Current price/funding checks, exact approvals, optional simulation/gas |
-| `buildSwap(quote,{slippageBps,deadline})` | Offline encoder; does not refresh or authenticate a supplied quote |
-| `buildApprovals(swap,currentAllowance)` | Exact allowance, with zero-first when necessary |
-| `minimumAmountOut(amountOut,slippageBps)` | Integer slippage floor; rejects a zero minimum |
-| `createOxleyMarkets({publicClient,deployments?})` | Routes `resolveMarket`, `quote`, `prepareSwap`, `checkSwap`, fee swaps and terms across the bundled generations |
-| `markets.resolveMarket(dealId,{identity?})` | On-chain generation lookup; `UNSUPPORTED_MARKET`, `AMBIGUOUS_MARKET`, `IDENTITY_MISMATCH` |
-| `getTermsStatus(...)`, `prepareAcceptTerms(...)`, `buildAcceptTerms(...)` | Terms standing, unsigned simulated `acceptTerms`, offline encoder |
-| `prepareSwapWithFee({...request,feeRecipient,feeBps})` | Ordered fee-bearing call batch, EIP-5792 request and sequential fallback |
-| `checkSwapWithFee(prepared,simulate?)` | Re-quote and re-derive every call; funding, terms and optional trade simulation |
+| `checkSwap(swap, simulate?)` | Current price/funding/terms checks, exact approvals, optional simulation/gas |
+| `buildSwap(quote,{slippageBps,deadline})`, `buildApprovals(swap,currentAllowance)`, `minimumAmountOut(amountOut,slippageBps)` | Offline encoders; none refreshes or authenticates a supplied quote |
+| `getTermsStatus(account)`, `prepareAcceptTerms({account})`, `buildAcceptTerms(...)` | Terms standing, unsigned simulated `acceptTerms`, offline encoder |
+| `prepareSwapWithFee({...request,feeRecipient,feeBps})`, `checkSwapWithFee(prepared,simulate?)` | Ordered fee-bearing call batch, EIP-5792 request and sequential fallback; re-quote and re-derive every call |
 | `buildSwapWithFee(quote,options)`, `integratorFeeAmount(basis,bps)` | Offline builder and fee arithmetic (`MAX_INTEGRATOR_FEE_BPS = 100`) |
-| `openingSurchargeWadAt(seconds)`, `buyFeeBps(rate)` | Mirror of the Gen3/Gen8 decaying surcharge schedule |
-| `getDynamicBidLimits`, `prepareDynamicBid`, `prepareDynamicRebid` from `@oxley/sdk/auctions` | Gen8 wallet limits, bids and rebids with witnesses |
-| `floorReachesMinimumRaise(gen,floor)`, `minimumRaiseFloor(gen)`, `validateLaunchFloor(gen,floor)` from `@oxley/sdk/launch` | Pure Gen8-family floor rule: lowest floor that can raise the generation's minimum ($30,000 net on Gen10, $50,000 on Gen8 and Gen9) and the Gen9/Gen10 floor cap |
-| `GEN8_FAMILY`, `gen8MinimumNetRaise(gen)`, `gen8MinimumGrossRaise(gen)` | Family table and each generation's net and gross minimum raise in USDC base units |
+| `openingSurchargeWadAt(seconds)`, `buyFeeBps(rate)` | Mirror of the curve's decaying opening surcharge schedule |
+| `createOxleyAuctionClient({publicClient,deployment})` from `@oxley/sdk/auctions` | `verifyDeployment`, `getAuction`, `getDynamicBidLimits`, `prepareDynamicBid`, `prepareDynamicRebid`, `prepareClaim`, `prepareRefund` |
+| `buildDynamicBid`, `buildDynamicRebid`, `buildAuctionClaim`, `buildAuctionRefund`, `buildAuctionBidApprovals` | Offline encoders for the same transactions |
+| `MIN_BID`, `TOKEN_CAP`, `MAX_LIVE_BIDS`, `MAX_WALLET_BIDS`, `BID_RULES`, `bidRefusal`, `walletCeiling`, ... | Bid rules and the pure helpers that mirror the hook |
+| `validateLaunchFloor(floor)`, `minimumRaiseFloor()`, `floorReachesMinimumRaise(floor)`, `quoteAuctionFloor(floor)` from `@oxley/sdk/launch` | Pure floor rules: the lowest floor that can raise $30,000 and the 1e21 cap |
+| `MINIMUM_NET_RAISE`, `MINIMUM_GROSS_RAISE`, `MAX_FLOOR_PRICE_WAD` | The controller's 30,000e6 net and 30,303,030,303 gross minimum raise and its floor cap |
 | `buildZeroExBasic(swap,proportionPpm?)` from `@oxley/sdk/0x` | Optional BASIC source action, not a complete user transaction |
-| `decodeOxleyRevert(errorOrData,{generation?})` | Pure decoder for Oxley rule reverts (Gen2, terms, curve trades, Gen8 bids, Gen9 and Gen10 launch floor cap) into `{name,args,message}`, else `null` |
+| `decodeOxleyRevert(errorOrData,{quoteSymbol?})` | Pure decoder for Oxley rule reverts (terms, curve trades, gate, Dynamic Bids, floor cap) into `{name,args,message}`, else `null` |
 
 All amounts use bigint base units, not floating point. Coin precision is 18;
 USDC/Oxy-USDC precision is 6. Use viem `parseUnits`/`formatUnits` at UI boundaries.
@@ -345,47 +251,44 @@ Serialize bigint values as decimal strings at JSON boundaries.
 
 ## Integration Semantics
 
-- The trading client exposes only active registered post-auction markets against
-  the configured USDC quote asset. Auction bids, principal refunds and token
-  claims are prepared by the separate `/auctions` client; they are not atomic
-  swap routes. The `/data` client is read-only. No SDK client signs or broadcasts.
-- Auction launches use the separate `/launch` client and creator-funded native
-  operating bond. Bridge transfers, mint/twin markets, native-asset bid/trade
-  payments and exact-output trading remain outside the package's scope.
+- The trading client exposes only active registered markets against the configured
+  USDC quote asset. Auction bids, rebids, principal refunds and token claims are prepared
+  by the separate `/auctions` client; they are not atomic swap routes. The `/data` client
+  is read-only. No SDK client signs or broadcasts.
+- Bridge transfers, mint and twin markets, native-asset bid or trade payments and
+  exact-output trading remain outside the package's scope.
 - A market is identified by `(chainId, curve, marketId)`. Do not assume token
-  symbols are identities or pick the first matching token across deployments.
-- Native on-chain reads are `quoteBuy(id,amount,caller)` and
-  `quoteSell(id,amount,caller)`, both `external view`. The SDK normalizes pairs;
-  there is no newly deployed `quote(tokenIn,tokenOut,amountIn)` contract.
-- Native swaps are `buy` and `sell`. Input is pulled from, and output is paid to,
-  the immediate caller. An aggregator uses its executor as caller, then performs
-  its usual final payout. No callback is invoked on the provider.
+  symbols are identities.
+- Native on-chain reads are `quoteBuy(id,amount)` and `quoteSell(id,amount)`, both
+  `external view` and independent of the caller. The SDK normalizes pairs; there is no
+  `quote(tokenIn,tokenOut,amountIn)` contract.
+- Native swaps are `buy(id,amount,minimumOut,deadline)` and `sell(id,amount,minimumOut,deadline)`.
+  Input is pulled from, and output is paid to, the immediate caller. An aggregator uses its
+  executor as caller, then performs its usual final payout. No callback is invoked on the provider.
 - **Rewards also use the immediate caller.** Direct wallets retain their buying
   reward identity. An intermediary is recorded for routed buys; the SDK cannot
   infer or authenticate its end user. Do not advertise end-user reward eligibility
   for generic aggregator routes. This is existing contract behavior, not an SDK fee.
 - Approval is a separate transaction unless the provider already has an atomic
   funding mechanism. Confirm approvals and requote before submitting.
-- Sell quotes returning a collateral component are rejected. Ordinary buys and
-  sells, fees and reward accounting revert together on failure. A treasury transfer
-  failure may defer treasury payment according to the existing fee contract.
+- Ordinary buys and sells, fees and reward accounting revert together on failure. A
+  treasury transfer failure may defer treasury payment according to the existing fee contract.
 - Buying can be paused while sells remain available. Propagate contract errors;
   do not report failed simulation as a successful trade.
 
 ## Networks And Trust
 
-The bundled testnet manifests identify the flat-fee, Gen3 and Gen8 auction graphs on chain
-99801. The mainnet template intentionally fails validation until actual mainnet
-values are supplied. Mainnet requires USDC and a fresh contract graph bound to
-that token; changing an SDK address cannot change an immutable deployed binding.
-There is no fallback between networks.
+The bundled testnet manifest identifies the Gen10 auction graph on chain 99801. The mainnet
+template intentionally fails validation until actual mainnet values are supplied. Mainnet
+requires USDC and a fresh contract graph bound to that token; changing an SDK address cannot
+change an immutable deployed binding. There is no fallback between networks.
 
 Contract hashes come from Oxley's release manifest. They authenticate a selected
 deployment, not the economic authenticity of an arbitrary user-supplied manifest.
 Oxley must supply the reviewed mainnet manifest. For proxy tokens such as USDC,
 the proxy runtime hash is not proof that its implementation can never change.
 
-The trading client verifies immutable contract pins on first use and on explicit
+The clients verify immutable contract pins on first use and on explicit
 `verifyDeployment()`. Each operation checks the RPC chain and reads a single
 numbered block with a final hash check. A reorg causes rejection; persist and
 rewind discovery cursors to the last canonical checkpoint. Consumers choose
@@ -412,13 +315,14 @@ npm run bundle -- /path/to/oxley-provider-sdk
 ANVIL_BIN=/path/to/anvil npm run test:evm
 # Optional public, read-only verification:
 npm run test:live
-npm run test:live:markets   # every generation, live markets, fee batches, terms, surcharge mirror
-# Regenerate src/testnet-deployments.ts after changing a deployments/*.json manifest:
+npm run test:live:auctions  # the full Gen10 graph, bid-fee quote, optional auction and wallet limits
+npm run test:live:markets   # live market, fee batches, terms and the surcharge mirror
+npm run test:live:launch    # launch floor rules against the live adapter
+# Regenerate src/testnet-deployment.ts after changing deployments/elysium-testnet.json:
 npm run embed
 ```
 
-Local EVM tests use retained real Oxley creation bytecode and an unmodified 0x
-BASIC implementation pinned in `test/contracts/upstream/provenance.json`. The
-fixture wrapper supplies ordinary funding/final settlement, not the complete
-0x Permit2/meta-transaction/deployment system. Tests and test compiler dependencies
-are excluded from the npm archive. A source checkout includes reproduction scripts.
+The local EVM test places bids on a real vendor continuous clearing auction through retained
+scaffolding contracts and executes the SDK's approval, exit and claim transactions. Tests and test
+compiler dependencies are excluded from the npm archive. A source checkout includes reproduction
+scripts.

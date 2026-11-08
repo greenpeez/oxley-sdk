@@ -1,16 +1,13 @@
 import { encodeFunctionData, type Address, type Hex } from "viem";
-import { termsRegistryAbi } from "./gen3-abis.js";
+import { termsRegistryAbi } from "./curve-abis.js";
 import { address, check, hash, OxleyError, uint } from "./validation.js";
 import type { Anchor, Transaction } from "./types.js";
 import type { ClientContext } from "./client-context.js";
 
-/**
- * The caller's standing in the terms registry bound to a Gen3/Gen8 curve. Flat-fee and Gen2 curves have no terms:
- * `termsRegistry` is null and `accepted` is true. While the registry's `requiredVersion` is zero nothing is enforced.
- */
+/** The caller's standing in the terms registry bound to the curve. While the registry's `requiredVersion` is zero nothing is enforced. */
 export interface TermsStatus extends Anchor {
   readonly account: Address;
-  readonly termsRegistry: Address | null;
+  readonly termsRegistry: Address;
   /** The registry currently requires acceptance (`requiredVersion > 0`). */
   readonly enforced: boolean;
   readonly requiredVersion: bigint;
@@ -35,13 +32,9 @@ export function buildAcceptTerms(input: { chainId: number; termsRegistry: Addres
 
 export function createTermsReader(context: ClientContext) {
   const { rpc, deployment, snapshot, assertCanonical, ensureVerified } = context;
-  const registry = deployment.termsRegistry?.address ?? null;
+  const registry = deployment.termsRegistry.address;
   async function termsAt(account: Address, anchor: Anchor): Promise<TermsStatus> {
     address(account);
-    if (!registry) {
-      return Object.freeze({ ...anchor, account, termsRegistry: null, enforced: false, requiredVersion: 0n, latestVersion: 0n,
-        acceptedVersion: 0n, accepted: true, termsHash: null, uri: null });
-    }
     const at = { address: registry, abi: termsRegistryAbi, blockNumber: anchor.blockNumber } as const;
     const [requiredVersion, latestVersion, acceptedVersion, accepted] = await Promise.all([
       rpc.readContract({ ...at, functionName: "requiredVersion" }), rpc.readContract({ ...at, functionName: "latestVersion" }),
@@ -70,7 +63,7 @@ export function createTermsReader(context: ClientContext) {
    */
   async function prepareAcceptTerms(input: { account: Address }) {
     const status = await getTermsStatus(input.account);
-    if (!status.termsRegistry || status.accepted || !status.termsHash) return { ...status, transaction: null, simulated: false as const };
+    if (status.accepted || !status.termsHash) return { ...status, transaction: null, simulated: false as const };
     const transaction = buildAcceptTerms({ chainId: deployment.chainId, termsRegistry: status.termsRegistry,
       version: status.requiredVersion, termsHash: status.termsHash });
     try { await rpc.call({ ...transaction, account: input.account, blockNumber: status.blockNumber }); }

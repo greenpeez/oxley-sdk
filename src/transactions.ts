@@ -1,6 +1,6 @@
 import { encodeFunctionData } from "viem";
 import { tokenAbi } from "./abis.js";
-import { encodeCurveTrade } from "./curve-profile.js";
+import { encodeCurveTrade } from "./curve.js";
 import { address, check, hash, uint } from "./validation.js";
 import type { Quote, Swap, Transaction } from "./types.js";
 
@@ -29,7 +29,7 @@ export function validateSwapQuote(quote: Quote, deadline: bigint): void {
   check(deadline > quote.timestamp, "EXPIRED_DEADLINE", "Deadline must be later than the quote block");
 }
 
-/** Pure encoder; the quote's market generation selects the curve's call shape. Use prepareSwap for a fresh, RPC-validated quote. */
+/** Pure encoder. Use prepareSwap for a fresh, RPC-validated quote. */
 export function buildSwap(quote: Quote, options: { slippageBps: number; deadline: bigint }): Swap {
   validateSwapQuote(quote, options.deadline);
   return swapWithMinimum(quote, minimumAmountOut(quote.amountOut, options.slippageBps), options.deadline);

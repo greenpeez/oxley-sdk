@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { decodeFunctionData } from "viem";
-import { createOxleyAuctionClient, decodeBidWitnesses, encodeBidWitnesses, parseAuctionDeployment, gen8BidHookAbi, GEN8_BID_RULES } from "../src/auctions.js";
+import { decodeBidWitnesses, encodeBidWitnesses, bidHookAbi, BID_RULES } from "../src/auctions.js";
 import { OxleyError, tokenAbi } from "../src/index.js";
-import { parseLaunchDeployment } from "../src/launch.js";
-import { addr, full, manifest } from "./support/chain.js";
+import { addr, full } from "./support/chain.js";
 import { auction, createAuctionWorld, dealId, owner, ROUTER, HOOK, type AuctionWorld, type StoredBid } from "./support/auction.js";
 
 const code = (expected: string) => (error: unknown) => error instanceof OxleyError && error.code === expected;
@@ -21,10 +20,10 @@ function withBids(chain: AuctionWorld, ...stored: StoredBid[]) {
 test("a fresh wallet's limits come from the hook, bounded by the balance after the 0.1% fee", async () => {
   const chain = createAuctionWorld();
   const limits = await chain.client().getDynamicBidLimits({ dealId, owner });
-  assert.deepEqual([limits.committed, limits.ceiling, limits.allowance, limits.minimumBid], [0n, 5_050_505_051n, 5_050_505_051n, 20_000_000n]);
+  assert.deepEqual([limits.committed, limits.ceiling, limits.allowance, limits.minimumBid], [0n, 3_030_303_031n, 3_030_303_031n, 20_000_000n]);
   assert.deepEqual([limits.liveBids, limits.bidsLeft, limits.positions.length, limits.minimumRaiseMet, limits.termsAccepted, limits.creatorExcluded], [0, 3, 0, false, true, false]);
   assert.equal(limits.clearingPriceQ96, 200n); assert.equal(limits.maximumBid, 999_000_999n); // largest principal whose fee still fits 1000 USDC
-  assert.deepEqual(limits.rules, GEN8_BID_RULES); assert.equal(limits.blockNumber, 100n);
+  assert.deepEqual(limits.rules, BID_RULES); assert.equal(limits.blockNumber, 100n);
   chain.world.balance = 30_000_000n;
   assert.equal((await chain.client().getDynamicBidLimits({ dealId, owner })).maximumBid, 29_970_030n); // principal + floor(0.1%) == the balance
 });
@@ -34,8 +33,8 @@ test("stored bids are classified, slots counted and one verified witness is prod
   const limits = await chain.client().getDynamicBidLimits({ dealId, owner });
   assert.deepEqual(limits.positions.map(p => [p.bidId, p.outbid, p.exited, p.amountUnits]), [[0n, true, false, 50_000_000n], [1n, false, false, 50_000_000n]]);
   assert.deepEqual([limits.liveBids, limits.bidsLeft], [1, 2]);
-  const preview = chain.state.simulations.find(call => call.to === HOOK && decodeFunctionData({ abi: gen8BidHookAbi, data: call.data }).functionName === "preview");
-  assert.deepEqual(decodeFunctionData({ abi: gen8BidHookAbi, data: preview!.data }).args,
+  const preview = chain.state.simulations.find(call => call.to === HOOK && decodeFunctionData({ abi: bidHookAbi, data: call.data }).functionName === "preview");
+  assert.deepEqual(decodeFunctionData({ abi: bidHookAbi, data: preview!.data }).args,
     [auction, owner, [{ lastFull: 10n, outbid: 30n }, { lastFull: 30n, outbid: 0n }]]);
   // An exited or marginal bid keeps its slot accounting; the creator has no slots at all.
   withBids(chain, bid(0n, 150n, 10n, { exitedBlock: 40n }));
@@ -62,7 +61,7 @@ test("a first bid carries empty witnesses, a derived previous tick, exact approv
   const prepared = await chain.client().prepareDynamicBid(request);
   assert.deepEqual([prepared.kind, prepared.principal, prepared.fee, prepared.debit, prepared.simulated], ["bid", 100_000_000n, 100_000n, 100_100_000n, false]);
   assert.equal(prepared.deadline, 2_000_000_120n); assert.equal(prepared.previousTick, 1500n);
-  const decoded = decodeFunctionData({ abi: full("ElysiumCcaBidRouterGen8"), data: prepared.transaction.data });
+  const decoded = decodeFunctionData({ abi: full("bid-router"), data: prepared.transaction.data });
   assert.equal(prepared.transaction.to, ROUTER);
   assert.deepEqual([decoded.functionName, decoded.args], ["submitBid", [dealId, 2000n, 100_000_000n, 1500n, 2_000_000_120n, encodeBidWitnesses([])]]);
   assert.deepEqual(prepared.approvals.map(tx => [tx.to, decodeFunctionData({ abi: tokenAbi, data: tx.data }).args]), [[addr(3), [ROUTER, 100_100_000n]]]);
@@ -78,7 +77,7 @@ test("a wallet with stored bids sends one witness per bid, and simulation needs 
   await assert.rejects(sdk.prepareDynamicBid({ ...request, simulate: true, deadline: 5000n }), code("APPROVAL_REQUIRED"));
   chain.world.allowance = 100_100_000n;
   const prepared = await sdk.prepareDynamicBid({ ...request, simulate: true, deadline: 5000n });
-  const [, , , , , data] = decodeFunctionData({ abi: full("ElysiumCcaBidRouterGen8"), data: prepared.transaction.data }).args as [unknown, unknown, unknown, unknown, unknown, `0x${string}`];
+  const [, , , , , data] = decodeFunctionData({ abi: full("bid-router"), data: prepared.transaction.data }).args as [unknown, unknown, unknown, unknown, unknown, `0x${string}`];
   assert.deepEqual(decodeBidWitnesses(data), [{ lastFull: 10n, outbid: 30n }, { lastFull: 30n, outbid: 0n }]);
   assert.deepEqual([prepared.approvals.length, prepared.simulated, prepared.deadline], [0, true, 5000n]);
   assert.deepEqual(chain.state.simulations.at(-1) && [chain.state.simulations.at(-1)!.to, chain.state.simulations.at(-1)!.account], [ROUTER, owner]);
@@ -111,7 +110,7 @@ test("a rebid exits one outbid bid with its own witness and is available only af
   await assert.rejects(sdk.prepareDynamicRebid(rebid), code("REBID_NOT_AVAILABLE")); // minimum raise not met yet
   chain.world.minimumRaiseMet = true;
   const prepared = await sdk.prepareDynamicRebid(rebid);
-  const decoded = decodeFunctionData({ abi: full("ElysiumCcaBidRouterGen8"), data: prepared.transaction.data });
+  const decoded = decodeFunctionData({ abi: full("bid-router"), data: prepared.transaction.data });
   assert.equal(prepared.kind, "rebid"); assert.deepEqual(prepared.exit, { lastFull: 10n, outbid: 30n });
   assert.deepEqual([decoded.functionName, decoded.args?.slice(0, 3)], ["rebid", [dealId, 0n, { lastFull: 10n, outbid: 30n }]]);
   await assert.rejects(sdk.prepareDynamicRebid({ ...rebid, oldBidId: 1n }), code("REBID_NOT_AVAILABLE")); // still live
@@ -120,37 +119,4 @@ test("a rebid exits one outbid bid with its own witness and is available only af
   await assert.rejects(sdk.prepareDynamicRebid({ ...rebid, oldBidId: -1n }), code("INVALID_AMOUNT"));
   withBids(chain, bid(0n, 150n, 10n, { exitedBlock: 40n }));
   await assert.rejects(sdk.prepareDynamicRebid(rebid), code("REBID_NOT_AVAILABLE")); // already exited
-});
-test("Dynamic Bids exist only on Gen8 and the generic bid path refuses a Gen8 deployment", async () => {
-  const chain = createAuctionWorld();
-  const flat = createOxleyAuctionClient({ publicClient: chain.rpc, deployment: manifest("flat-fee", 0) });
-  await assert.rejects(flat.prepareDynamicBid(request), code("GEN8_REQUIRED"));
-  await assert.rejects(flat.getDynamicBidLimits({ dealId, owner }), code("GEN8_REQUIRED"));
-  await assert.rejects(chain.client().prepareBid({ ...request, previousTick: 1n, deadline: 5000n }), code("DYNAMIC_BID_REQUIRED"));
-});
-test("a Gen8 auction deployment pins the hook, helper, terms registry and exact rules; Gen3 and launches are refused", async () => {
-  const gen8 = manifest("gen8", 20), bindings: Record<string, unknown> = { ...gen8.auctionBindings };
-  delete bindings.bidHook;
-  assert.equal(parseAuctionDeployment(gen8).auctionBindings.bidHook?.address, addr(28));
-  assert.throws(() => parseAuctionDeployment({ ...gen8, auctionBindings: bindings }), code("AUCTION_BINDINGS_REQUIRED"));
-  assert.throws(() => parseAuctionDeployment({ ...gen8, bidRules: { ...GEN8_BID_RULES, minBid: "10000000" } }), code("INVALID_BID_RULES"));
-  assert.throws(() => parseAuctionDeployment({ ...gen8, bidRules: undefined }), code("INVALID_BID_RULES"));
-  assert.throws(() => parseAuctionDeployment({ ...gen8, auctionBindings: { ...gen8.auctionBindings, bidHook: gen8.auctionBindings.adapter } }), code("INVALID_DEPLOYMENT"));
-  assert.throws(() => parseAuctionDeployment(manifest("gen3", 10)), code("UNSUPPORTED_GENERATION"));
-  assert.throws(() => parseAuctionDeployment({ ...manifest("flat-fee", 0), bidRules: GEN8_BID_RULES }), code("INVALID_DEPLOYMENT"));
-  assert.throws(() => parseLaunchDeployment({ ...gen8, launchBindings: {} }), code("UNSUPPORTED_GENERATION"));
-});
-test("verification rejects a hook, helper or registry that differs from the pins, and compiled rules the SDK does not mirror", async () => {
-  const mutate = [
-    (c: AuctionWorld) => { c.world.hookTerms = addr(99); },
-    (c: AuctionWorld) => { c.world.hookRulesMinimum = 10_000_000n; },
-    (c: AuctionWorld) => { c.state.codes.set(addr(29), "0x"); },
-    (c: AuctionWorld) => { c.state.codes.set(addr(28), "0x"); },
-    (c: AuctionWorld) => { c.state.codes.set(addr(25), "0x"); },
-  ];
-  assert.equal((await createAuctionWorld().client().verifyDeployment()).blockNumber, 100n);
-  for (const change of mutate) {
-    const chain = createAuctionWorld(); change(chain);
-    await assert.rejects(chain.client().verifyDeployment(), (error: unknown) => error instanceof OxleyError && /MISMATCH/.test(error.code));
-  }
 });

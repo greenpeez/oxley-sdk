@@ -1,5 +1,104 @@
 # Changelog
 
+## 0.7.0-next.0 - 2026-11-08
+
+**Breaking.** The SDK now supports only Gen10, the contract release live on Elysium (testnet chain id 99801; mainnet will launch
+with Gen10 only). Everything that existed only for the flat-fee release and for Gen2, Gen3, Gen8 and Gen9 is removed, and the
+generation-prefixed names of what remains are plain names. Gen10 bids are Dynamic Bids through the accepted-bid router and the
+per-wallet hook, so the generic bid path is gone with the rest. No contract is deployed and no transaction is broadcast by this change.
+
+### Removed
+
+- **Other generations.** The flat-fee, Gen2, Gen3, Gen8 and Gen9 manifests and their exports (`flatFeeTestnetDeployment`,
+  `gen3TestnetDeployment`, `gen8TestnetDeployment`, `gen9TestnetDeployment`, `testnetDeployments`), the `GEN8_FAMILY` table with
+  `GEN8_FAMILY_IDS`, `isGen8Family`, `gen8FamilyMember`, `Gen8FamilyId` and `Gen8FamilyMember`, `DeploymentGeneration`,
+  `deploymentGeneration` and the manifest's `generation` field, the Gen3 manifest block (`gen3`, pro-trade router, order executor, reward
+  authorizer, coin factory), and the Gen9 and Gen10 manifest slots in the release scripts.
+- **Routing.** `createOxleyMarkets` (and `OxleyMarkets`, `DeploymentIdentityHint`, `MarketGeneration`, `MarketsDiscoveryOptions`, `resolveMarket`,
+  `generations`, `client(name)`, `verifyDeployments`) are removed: one client is bound to one deployment, and `createOxleyClient` covers every
+  call. The error codes `UNKNOWN_DEPLOYMENT`, `AMBIGUOUS_MARKET` and `IDENTITY_MISMATCH` are gone with it, and `Market.generation` is removed.
+- **Generic bid path.** `prepareBid`, `getBidAllowance`, `buildAuctionBid`, `AuctionBidInput`, `parseAuctionDeployment` and the Gen2 breadth-rule hook
+  ABI (`breadthBidHookAbi`), and the codes `DYNAMIC_BID_REQUIRED`, `GEN8_REQUIRED`, `GEN2_REQUIRED`, `AUCTION_NOT_REGISTERED`.
+- **Launch client.** `createOxleyLaunchClient`, `buildCreatorAccount`, `buildAuctionLaunch`, `prepareLaunch`, `getLaunch`, `AuctionLaunchInput`,
+  `LaunchDeployment`, `LaunchRpcClient`, `validateAuctionLaunch`, the exact-duration helpers (`auctionDurationBounds`, `auctionDurationBlocks`,
+  `sampleSecondsPerBlock`, `AUCTION_MIN_BLOCKS_PER_HOUR`, `AUCTION_MAX_BLOCKS_PER_HOUR`, `BLOCK_RATE_SAMPLE_BLOCKS`), `launchBindings` in the manifest, the
+  creator-account and factory ABIs (`creatorAccountAbi`, `creatorAccountFactoryAbi`, `gen2CreatorAccountAbi`, `launchControllerAbi`, `launchEntryAbi`,
+  `launchBondAbi`) and all `LAUNCH_*`, `DURATION_*` and `EXACT_DURATION_*` codes. The client only ever served flat-fee and Gen2 deployments: it already
+  refused Gen8, Gen9 and Gen10 (`UNSUPPORTED_GENERATION`), whose manifests carry no launch bindings. `@oxley/sdk/launch` keeps the pure launch-floor rules.
+- **Trading shapes.** The account-taking `quoteBuy` and `quoteSell`, the five-argument `sell`, the collateral leg of a sell and its
+  `COLLATERAL_OUTPUT` code, and the reserve-asset `market` layout. Revert decoding drops `AuctionNotRegistered`, `ExactDurationRequired`,
+  `InvalidDurationBlocks` and `InvalidRequestedHours`, `walletCapMessage` and the `generation` option of `decodeOxleyRevert`.
+- **Full compiler ABIs.** `@oxley/sdk/abis/{creator-account,creator-account-factory,auction-controller,auction-bid-router,auction-adapter,registry}.json` and
+  `@oxley/sdk/abis/{gen2,gen3,gen8}/*` (flat-fee and earlier-generation ABIs). The controller, adapter and registry compiler ABIs for Gen10 are not in this
+  repository, so those three are typed subsets only. Deployment exports `elysium-testnet-gen{2,3,8,9,10}.json` are replaced by `elysium-testnet.json`.
+- **Docs, scripts and tests.** `docs/gen2-artifacts.json`, `docs/launch-artifacts.json`, `docs/launch-validation.md`, `docs/funded-swaps-2026-10-16.md`;
+  `scripts/import-launch-fixtures.mjs`, `import-zero-ex-fixture.mjs`, `build-executor-fixture.mjs` and the `build:test-executor` script; `solc` from
+  the dev dependencies; the Gen2, Gen3, Gen8 and Gen9 unit suites, and the local EVM launch and settlement suites with their flat-fee fixtures, the vendored
+  0x BASIC test contracts and the BASIC test executor. The EVM settlement suite ran the SDK against real flat-fee curve bytecode and 0x BASIC; Gen10 creation
+  bytecode is not in this repository, so it cannot be rebuilt here (see "Not covered").
+
+### Renamed
+
+| Before | After |
+| --- | --- |
+| `gen8CurveAbi` (and the flat-fee `curveAbi`) | `curveAbi` |
+| `gen8BidRouterAbi` | `auctionBidRouterAbi` |
+| `gen8BidHookAbi` | `bidHookAbi` |
+| `gen8AdapterAbi` (`MAX_CCA_BID_PRICE_Q96`) | folded into `auctionAdapterAbi` |
+| `gen2CurveAbi` | `tradingGateAbi` |
+| `GEN8_MIN_BID`, `GEN8_TOKEN_CAP` | `MIN_BID`, `TOKEN_CAP` |
+| `GEN8_MAX_LIVE_BIDS`, `GEN8_MAX_WALLET_BIDS`, `GEN8_MAX_PRICE_LEVELS` | `MAX_LIVE_BIDS`, `MAX_WALLET_BIDS`, `MAX_PRICE_LEVELS` |
+| `GEN8_BID_RULES` | `BID_RULES` |
+| `Gen8Position`, `Gen8Refusal`, `Gen8WalletLimits` | `BidPosition`, `BidRefusal`, `WalletLimits` |
+| `GEN9_MAX_FLOOR_PRICE_WAD` | `MAX_FLOOR_PRICE_WAD` |
+| `GEN8_MINIMUM_NET_RAISE`, `GEN10_MINIMUM_NET_RAISE` | `MINIMUM_NET_RAISE` (30,000e6) |
+| `gen8MinimumNetRaise(generation)`, `gen8MinimumGrossRaise(generation)` | `MINIMUM_NET_RAISE`, `MINIMUM_GROSS_RAISE` (30,303,030,303) |
+| `GEN8_OFFERED_UNITS` | `OFFERED_UNITS` |
+| `floorReachesMinimumRaise(generation, floor)`, `validateLaunchFloor(generation, floor)` | `floorReachesMinimumRaise(floor)`, `validateLaunchFloor(floor)` |
+| `minimumRaiseFloor(generation)` | `minimumRaiseFloor()` |
+| `gen10TestnetDeployment` | `testnetDeployment` |
+| `parseAuctionDeployment`, `parseLaunchDeployment` | `parseDeployment` (one validated shape for every client) |
+| `openingFeeCurveAbi` | `openingFeeCurveAbi` without `termsRegistry` and the curve error entries (both are on `curveAbi`) |
+| `@oxley/sdk/abis/gen8/curve.json`, `.../gen8/bid-router.json`, `.../gen8/bid-hook.json` | `@oxley/sdk/abis/curve.json`, `bid-router.json`, `bid-hook.json` |
+| `@oxley/sdk/abis/terms-registry.json`, `.../cca-auction.json` | unchanged paths; files are now `abis/terms-registry.json`, `abis/cca-auction.json` |
+| `@oxley/sdk/deployments/elysium-testnet-gen10.json` | `@oxley/sdk/deployments/elysium-testnet.json` (the Gen10 manifest, without the `generation` field) |
+| `src/gen8-*.ts`, `src/auction-gen8-*.ts`, `src/gen9-abis.ts`, `src/curve-profile.ts` | `bid-rules.ts`, `bid-transactions.ts`, `witnesses.ts`, `auction-bid.ts`, `auction-graph.ts`, `auction-wallet.ts`, `curve.ts`, `controller-rules.ts` |
+
+### Changed behaviour
+
+- **One manifest shape.** `parseDeployment` validates the whole Gen10 manifest: curve, registry, USDC, controller, terms registry, router, adapter, bid hook
+  and exposure helper (nine distinct addresses, each with its runtime code hash) and the exact `bidRules`. Both clients take the same manifest. The
+  `generation` field is gone, and `TermsStatus.termsRegistry` is always an address. `deployments/mainnet.template.json` has the same fields as the testnet
+  manifest, with placeholders. `getTradingStatus` returns `{ marketId, open, fallbackAt, ...block }` (the gate always applies; `gated` is removed).
+  `Quote.openingSurchargeWad` is present on buys. The failing-verification messages no longer name a generation: "The controller's minimum raise differs
+  from the 30,000 USDC this SDK mirrors".
+- **Fix: market discovery.** `discoverMarkets` filtered the curve's logs with the earlier curve's event signature (`MarketActivated` with a `reserveAsset` field).
+  The Gen10 curve's event is `MarketActivated(dealId, coin, creator, quoteSeed)`, so the filter's topic never matched a Gen10 activation. The filter now uses the
+  compiled curve's event (`curveAbi`), and a test compares its selector with the compiled ABI's. The offline fixtures could not catch this: their logs were canned.
+- **Kept checks.** Every Gen10 check remains with its test: pinned runtime code hashes, exact bid rules, distinct addresses, the controller's floor cap and
+  minimum raise (a $50,000 controller cannot pass), the terms registry binding, simulation before a transaction is returned, wallet cap, bid-slot and
+  creator refusals, terms acceptance, claim and refund preconditions, canonical-block checks and the data-feed validation. Two checks that could no longer fail
+  are removed: the "is this a Gen8-family deployment" gates and the sell-collateral rejection.
+
+### Tests, scripts and docs
+
+- Unit suites are rebuilt on one synthetic Gen10 deployment (`test/support`); `test/deployment.test.ts` covers the record, importer, manifest, mainnet template,
+  verification and embed script, `test/revert.test.ts` the revert decoder, and `test/artifacts.test.ts` checks every typed ABI subset against the hash-pinned compiler
+  ABIs. Counts: 120 unit and ABI tests in 18 files pass, with typecheck, build and the clean-archive consumer check (`npm run test:package`); the local EVM suite was not run (no Anvil on the build machine).
+- `scripts/check-package.mjs` asserts the exact value-export list of every entry point and that the archive contains nothing of another contract release.
+  `import-live-manifests.mjs` imports the one live record and the four compiler ABIs; `embed-deployments.mjs` generates `src/testnet-deployment.ts`.
+- `test:live:auctions`, `test:live:launch` and `test:live:markets` check the Gen10 graph, the floor rules against the live adapter, and (with `OXLEY_MARKET_ID`) a live
+  market. They are read-only and were not run for this change.
+- README and `docs/` describe Gen10 only. `docs/IOxleyCurve.sol` is the four-argument, account-free interface.
+
+### Not covered
+
+- The local EVM suite (`npm run test:evm`) keeps one scenario: SDK approvals, exits and claims against a real vendor CCA, with the retained bid router and adapter as
+  bid-placing scaffolding. It needs Anvil and was not run here. Real-bytecode coverage of the Gen10 curve and router, and of 0x BASIC against the Gen10 curve, needs
+  Gen10 creation bytecode fixtures.
+- Typed subsets of the controller, adapter and registry have no Gen10 compiler ABI to be checked against in this repository (the adapter subset is checked against
+  the retained adapter fixture).
+
 ## 0.6.0-next.3 - 2026-11-07
 
 Gen10 support. Gen10 is the Gen9 contract stack redeployed with one change: the launch controller's net minimum raise is **$30,000**

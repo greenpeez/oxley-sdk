@@ -1,17 +1,13 @@
 import { keccak256 } from "viem";
 import { auctionControllerAbi, auctionBidRouterAbi, auctionAdapterAbi } from "./auction-abis.js";
 import { tokenAbi } from "./abis.js";
-import { check, deploymentGeneration, sameAddress, address } from "./validation.js";
-import { verifyGen8Graph } from "./auction-gen8-context.js";
-import { isGen8Family } from "./gen8-family.js";
-import type { Anchor, RpcClient } from "./types.js";
-import type { AuctionDeployment } from "./auctions.js";
+import { check, sameAddress, address } from "./validation.js";
+import { verifyGraph } from "./auction-graph.js";
+import type { Anchor, Deployment, RpcClient } from "./types.js";
 
-export function createAuctionContext(rpc: RpcClient, deployment: AuctionDeployment) {
+export function createAuctionContext(rpc: RpcClient, deployment: Deployment) {
   const { bidRouter, adapter } = deployment.auctionBindings;
   const controller = deployment.auctionController;
-  // `gen8Family` is true for every generation that shares the Gen8 contract stack (Gen8, Gen9 and Gen10).
-  const generation = deploymentGeneration(deployment), gen2 = generation === "gen2", gen8Family = isGen8Family(generation);
   async function anchor(): Promise<Anchor> {
     const [chain, block] = await Promise.all([rpc.getChainId(), rpc.getBlock({ blockTag: "latest" })]);
     check(chain === deployment.chainId, "CHAIN_MISMATCH", "RPC chain does not match deployment");
@@ -51,9 +47,9 @@ export function createAuctionContext(rpc: RpcClient, deployment: AuctionDeployme
       && sameAddress(hook, adapterHook) && decimals === 6,
     "AUCTION_BINDING_MISMATCH", "Controller, router, adapter or quote binding mismatch");
     address(hook);
-    await verifyGen8Graph(rpc, deployment, at, hook);
+    await verifyGraph(rpc, deployment, at, hook);
     return hook;
   }
-  return { rpc, deployment, bidRouter, adapter, controller, gen2, gen8Family, anchor, canonical, verifyAt };
+  return { rpc, deployment, bidRouter, adapter, controller, anchor, canonical, verifyAt };
 }
 export type AuctionContext = ReturnType<typeof createAuctionContext>;

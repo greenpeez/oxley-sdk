@@ -5,10 +5,10 @@ import { createDiscoveryReader } from "./client-discovery.js";
 import { createSwapChecker, createSwapPreparer } from "./client-swaps.js";
 import { createFeeSwapPreparer } from "./client-fee-swaps.js";
 import { createTermsReader } from "./client-terms.js";
-import { parseDeployment } from "./validation.js";
+import { parseDeployment } from "./deployment.js";
 import type { RpcClient } from "./types.js";
 
-/** One client per deployment (flat-fee, Gen2, Gen3 or Gen8); `createOxleyMarkets` routes a market to the right one. */
+/** The trading client for one reviewed deployment: discovery, quotes, swaps (with optional integrator fees) and terms. */
 export function createOxleyClient(options: { publicClient: RpcClient; deployment: unknown }) {
   const deployment = parseDeployment(options.deployment);
   const context = createClientContext(options.publicClient, deployment);

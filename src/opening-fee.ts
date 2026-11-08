@@ -1,7 +1,7 @@
 import { check } from "./validation.js";
 
 /**
- * Mirror of the Gen3/Gen8 `ElysiumOpeningFee` schedule for countdowns and projections. The curve's own `quoteBuy` is the authority
+ * Mirror of the curve's `ElysiumOpeningFee` schedule for countdowns and projections. The curve's own `quoteBuy` is the authority
  * for what a trade pays (it already includes this surcharge); verify the mirror with `surchargeWadAt(elapsed)` on a curve.
  */
 export const OPENING_SURCHARGE_START_WAD = 180_000_000_000_000_000n;

@@ -1,43 +1,26 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import process from "node:process";
 import console from "node:console";
-import { MANIFESTS } from "./deployment-manifests.mjs";
+import { MANIFEST } from "./deployment-manifests.mjs";
 
 // Exercise the actual archive from an unrelated project, not a workspace symlink.
 const root = process.cwd();
 const output = execFileSync("npm", ["pack", "--json", "--ignore-scripts"], { encoding: "utf8" });
 const [pack] = JSON.parse(output);
-assert.ok(pack.files.some(file => file.path === "dist/index.js"));
-assert.ok(pack.files.some(file => file.path === "dist/index.d.ts"));
-assert.ok(pack.files.some(file => file.path === "dist/data.d.ts"));
-assert.ok(pack.files.some(file => file.path === "docs/data-api.md"));
-assert.ok(pack.files.some(file => file.path === "dist/auctions.d.ts"));
-assert.ok(pack.files.some(file => file.path === "docs/auctions.md"));
-assert.ok(pack.files.some(file => file.path === "dist/launch.d.ts"));
-assert.ok(pack.files.some(file => file.path === "docs/launch.md"));
-assert.ok(pack.files.some(file => file.path === "deployments/elysium-testnet-gen2.json"));
-assert.ok(pack.files.some(file => file.path === "docs/gen2-artifacts.json"));
-for (const path of ["deployments/elysium-testnet-gen3.json", "deployments/elysium-testnet-gen8.json", "docs/markets.md", "docs/integrator-fees.md",
-  "docs/live-artifacts.json", "abis/ElysiumCurveGen8.json", "abis/ElysiumReserveCurveGen3.json", "abis/OxleyTermsRegistry.json", "examples/integrator-fee.ts"]) {
-  assert.ok(pack.files.some(file => file.path === path), path);
-}
-// Optional manifests (Gen9, whose live manifest is not bundled) ship exactly when they exist; an absent one is reported, never invented.
-// A required manifest (Gen10 among them) must be in the package.
-const optional = MANIFESTS.filter(entry => !entry.required).map(entry => ({ ...entry, present: existsSync(join(root, entry.file)) }));
-for (const entry of optional) {
-  assert.equal(pack.files.some(file => file.path === entry.file), entry.present, `${entry.file} is packed exactly when it exists`);
-  if (!entry.present) console.log(`${entry.file} is absent: ${entry.generation} is not bundled`);
-}
-for (const entry of MANIFESTS.filter(item => item.required)) assert.ok(pack.files.some(file => file.path === entry.file), `${entry.file} is packed`);
-const gen9Present = optional.some(entry => entry.generation === "gen9" && entry.present);
-const generations = MANIFESTS.filter(entry => entry.required || existsSync(join(root, entry.file))).map(entry => entry.generation ?? "flat-fee");
+const packed = path => pack.files.some(file => file.path === path);
+for (const path of ["dist/index.js", "dist/index.d.ts", "dist/data.d.ts", "dist/auctions.d.ts", "dist/launch.d.ts", "dist/abis.d.ts", "dist/zero-ex.d.ts",
+  "docs/data-api.md", "docs/auctions.md", "docs/launch.md", "docs/markets.md", "docs/integrator-fees.md", "docs/mainnet.md", "docs/live-artifacts.json",
+  MANIFEST.file, "deployments/mainnet.template.json", "abis/curve.json", "abis/bid-router.json", "abis/bid-hook.json", "abis/terms-registry.json",
+  "abis/cca-auction.json", "examples/dynamic-bid.ts", "examples/integrator-fee.ts"]) assert.ok(packed(path), path);
 for (const file of pack.files) {
   assert.ok(/^(dist\/|abis\/|docs\/|deployments\/|examples\/|README\.md$|LICENSE$|package\.json$)/.test(file.path), file.path);
   assert.ok(!/(\.env|node_modules|test\/|fixtures|\.log$|private.key)/i.test(file.path), file.path);
+  // Nothing in the archive belongs to a contract release other than the one this package supports.
+  assert.ok(!/(gen[2389]\b|gen[2389][-_.]|flat-fee|VNext|creator-account|ElysiumReserveCurve|ElysiumCurveGen)/i.test(file.path), file.path);
 }
 const directory = mkdtempSync(join(tmpdir(), "oxley-sdk-consumer-"));
 try {
@@ -47,106 +30,97 @@ try {
   writeFileSync(join(directory, "consumer.mjs"), `
     import assert from 'node:assert/strict';
     import { encodeErrorResult } from 'viem';
-    import { createOxleyClient, parseDeployment, minimumAmountOut, decodeOxleyRevert, deploymentGeneration, createOxleyMarkets, testnetDeployments,
-      buildSwapWithFee, integratorFeeAmount, MAX_INTEGRATOR_FEE_BPS, buildAcceptTerms, openingSurchargeWadAt, termsRegistryAbi,
-      gen9TestnetDeployment, gen10TestnetDeployment, isGen8Family, GEN9_MAX_FLOOR_PRICE_WAD, GEN8_FAMILY, gen8MinimumNetRaise, gen8MinimumGrossRaise,
-      launchMinimumRaiseAbi } from '@oxley/sdk';
-    import { curveAbi, breadthBidHookAbi, gen2CurveAbi, launchFloorCapAbi } from '@oxley/sdk/abis';
-    import { buildZeroExBasic } from '@oxley/sdk/0x';
-    import { createOxleyDataClient, isCurrentData } from '@oxley/sdk/data';
-    import { createOxleyAuctionClient, buildAuctionClaim, buildAuctionRefund, buildDynamicBid, GEN8_BID_RULES, gen8BidHookAbi } from '@oxley/sdk/auctions';
-    import { createOxleyLaunchClient, quoteAuctionFloor, auctionDurationBlocks, gen2CreatorAccountAbi, floorReachesMinimumRaise, minimumRaiseFloor,
-      validateLaunchFloor } from '@oxley/sdk/launch';
-    import creatorAbi from '@oxley/sdk/abis/creator-account.json' with { type: 'json' };
-    import factoryAbi from '@oxley/sdk/abis/creator-account-factory.json' with { type: 'json' };
-    import controllerAbi from '@oxley/sdk/abis/auction-controller.json' with { type: 'json' };
-    import bidRouterAbi from '@oxley/sdk/abis/auction-bid-router.json' with { type: 'json' };
-    import adapterAbi from '@oxley/sdk/abis/auction-adapter.json' with { type: 'json' };
-    import ccaAbi from '@oxley/sdk/abis/cca-auction.json' with { type: 'json' };
+    import * as sdk from '@oxley/sdk';
+    import * as abis from '@oxley/sdk/abis';
+    import * as auctions from '@oxley/sdk/auctions';
+    import * as launch from '@oxley/sdk/launch';
+    import * as zeroEx from '@oxley/sdk/0x';
+    import * as data from '@oxley/sdk/data';
     import deployment from '@oxley/sdk/deployments/elysium-testnet.json' with { type: 'json' };
-    import gen2Deployment from '@oxley/sdk/deployments/elysium-testnet-gen2.json' with { type: 'json' };
-    import gen3Deployment from '@oxley/sdk/deployments/elysium-testnet-gen3.json' with { type: 'json' };
-    import gen8Deployment from '@oxley/sdk/deployments/elysium-testnet-gen8.json' with { type: 'json' };
-    ${gen9Present ? "import gen9Deployment from '@oxley/sdk/deployments/elysium-testnet-gen9.json' with { type: 'json' };" : ""}
-    import gen10Deployment from '@oxley/sdk/deployments/elysium-testnet-gen10.json' with { type: 'json' };
-    import gen3Curve from '@oxley/sdk/abis/gen3/curve.json' with { type: 'json' };
+    import template from '@oxley/sdk/deployments/mainnet.template.json' with { type: 'json' };
+    import curveAbi from '@oxley/sdk/abis/curve.json' with { type: 'json' };
+    import bidRouterAbi from '@oxley/sdk/abis/bid-router.json' with { type: 'json' };
+    import bidHookAbi from '@oxley/sdk/abis/bid-hook.json' with { type: 'json' };
     import termsAbi from '@oxley/sdk/abis/terms-registry.json' with { type: 'json' };
-    import gen8Curve from '@oxley/sdk/abis/gen8/curve.json' with { type: 'json' };
-    import gen8Router from '@oxley/sdk/abis/gen8/bid-router.json' with { type: 'json' };
-    import gen8Hook from '@oxley/sdk/abis/gen8/bid-hook.json' with { type: 'json' };
-    import gen2Controller from '@oxley/sdk/abis/gen2/auction-controller.json' with { type: 'json' };
-    import gen2Account from '@oxley/sdk/abis/gen2/creator-account.json' with { type: 'json' };
-    import gen2Factory from '@oxley/sdk/abis/gen2/creator-account-factory.json' with { type: 'json' };
-    import gen2Router from '@oxley/sdk/abis/gen2/bid-router.json' with { type: 'json' };
-    import gen2Hook from '@oxley/sdk/abis/gen2/bid-hook.json' with { type: 'json' };
-    import gen2Adapter from '@oxley/sdk/abis/gen2/adapter.json' with { type: 'json' };
-    import gen2Curve from '@oxley/sdk/abis/gen2/curve.json' with { type: 'json' };
-    import abi from '@oxley/sdk/abis/curve.json' with { type: 'json' };
-    assert.equal(parseDeployment(deployment).chainId, 99801);
-    assert.equal(minimumAmountOut(1000000n, 50), 995000n);
-    assert.ok(curveAbi.length && abi.length && createOxleyClient && buildZeroExBasic);
-    assert.ok(createOxleyDataClient({ baseUrl: 'https://example.com/api/data/v1', chainId: 99801 }).candles);
-    assert.equal(typeof createOxleyDataClient({ baseUrl: 'https://example.com/api/data/v1', chainId: 99801 }).tokens, 'function');
-    assert.equal(isCurrentData({ checkedAt: 0, freshness: 'fresh' }), false);
-    assert.ok(createOxleyAuctionClient && buildAuctionClaim && buildAuctionRefund);
-    assert.ok(controllerAbi.length && bidRouterAbi.length && adapterAbi.length && ccaAbi.length);
-    assert.ok(creatorAbi.length && factoryAbi.length && createOxleyLaunchClient);
-    assert.ok(quoteAuctionFloor(10000000000000000000n).floorPriceQ96 > 0n);
-    assert.equal(deploymentGeneration(parseDeployment(gen2Deployment)), 'gen2');
-    assert.equal(gen2Deployment.status, 'planned-fork-addresses');
-    assert.equal(auctionDurationBlocks({ hours: 1, secondsPerBlock: 0.1363 }), 26412);
-    assert.equal(decodeOxleyRevert('0x50fef614')?.name, 'ExactDurationRequired');
-    assert.ok(breadthBidHookAbi.length && gen2CurveAbi.length && gen2CreatorAccountAbi.length);
-    assert.ok([gen2Controller, gen2Account, gen2Factory, gen2Router, gen2Hook, gen2Adapter, gen2Curve].every(abi => abi.length));
-    assert.deepEqual(testnetDeployments.map(d => deploymentGeneration(parseDeployment(d))), ${JSON.stringify(generations)});
-    assert.equal(gen9TestnetDeployment === undefined, ${!gen9Present});
-    ${gen9Present ? "assert.equal(deploymentGeneration(parseDeployment(gen9Deployment)), 'gen9');" : ""}
-    assert.ok(isGen8Family('gen8') && isGen8Family('gen9') && isGen8Family('gen10') && !isGen8Family('gen3') && GEN9_MAX_FLOOR_PRICE_WAD === 10n ** 21n);
-    assert.equal(deploymentGeneration(parseDeployment(gen10Deployment)), 'gen10'); assert.deepEqual(gen10TestnetDeployment, gen10Deployment);
-    assert.equal(parseDeployment(gen10Deployment).releaseId, 'elysium-auctions-gen10-1fa4ef2a98fd14ed');
-    assert.equal(parseDeployment(gen10Deployment).termsRegistry.address, '0x94c8c7203e2a01e37f104fa6cbe00382642c084d');
-    assert.deepEqual([GEN8_FAMILY.gen8.minimumNetRaise, GEN8_FAMILY.gen9.minimumNetRaise, gen8MinimumNetRaise('gen10')], [50000000000n, 50000000000n, 30000000000n]);
-    assert.deepEqual([gen8MinimumGrossRaise('gen9'), gen8MinimumGrossRaise('gen10')], [50505050505n, 30303030303n]);
-    assert.equal(minimumRaiseFloor('gen10'), 101010101030162826490n); assert.ok(minimumRaiseFloor('gen9') > minimumRaiseFloor('gen10'));
-    assert.ok(floorReachesMinimumRaise('gen10', 110000000000000000000n) && !floorReachesMinimumRaise('gen9', 110000000000000000000n));
-    assert.doesNotThrow(() => validateLaunchFloor('gen10', 110000000000000000000n)); assert.throws(() => validateLaunchFloor('gen9', 110000000000000000000n), /minimum raise/);
-    assert.ok(launchMinimumRaiseAbi.length === 2 && quoteAuctionFloor(110000000000000000000n).floorPriceQ96 > 0n);
-    assert.equal(decodeOxleyRevert(encodeErrorResult({ abi: launchFloorCapAbi, errorName: 'FloorPriceAboveMaximum', args: [10n ** 21n + 1n, 10n ** 21n] }))?.name, 'FloorPriceAboveMaximum');
-    assert.equal(parseDeployment(gen3Deployment).termsRegistry.address, parseDeployment(testnetDeployments[1]).termsRegistry.address);
-    assert.equal(parseDeployment(gen8Deployment).releaseId, 'elysium-auctions-gen8-969bd0e317da4145');
-    assert.ok(createOxleyMarkets && buildSwapWithFee && buildAcceptTerms && buildDynamicBid && termsRegistryAbi.length && gen8BidHookAbi.length);
-    assert.equal(integratorFeeAmount(10000000n, 50), 50000n); assert.equal(MAX_INTEGRATOR_FEE_BPS, 100);
-    assert.equal(openingSurchargeWadAt(45), 8437500000000000n); assert.equal(GEN8_BID_RULES.minBid, '20000000');
-    assert.ok([gen3Curve, termsAbi, gen8Curve, gen8Router, gen8Hook].every(abi => abi.length));
+    import ccaAbi from '@oxley/sdk/abis/cca-auction.json' with { type: 'json' };
+    // The exact value-export surface of every entry point: an addition or a removal fails this check.
+    const names = module => Object.keys(module).sort();
+    assert.deepEqual(names(sdk), ${JSON.stringify([
+      "MAX_FLOOR_PRICE_WAD", "MAX_INTEGRATOR_FEE_BPS", "MINIMUM_GROSS_RAISE", "MINIMUM_NET_RAISE", "OPENING_SURCHARGE_SECONDS", "OPENING_SURCHARGE_START_WAD",
+      "OxleyError", "SEQUENTIAL_FEE_WARNING", "STANDARD_TRADING_FEE_BPS", "buildAcceptTerms", "buildApprovals", "buildSwap", "buildSwapWithFee", "buyFeeBps",
+      "createOxleyClient", "curveAbi", "decodeOxleyRevert", "eip5792Batch", "integratorFeeAmount", "launchFloorCapAbi", "launchMinimumRaiseAbi", "minimumAmountOut",
+      "openingFeeCurveAbi", "openingSurchargeAmount", "openingSurchargeWadAt", "parseDeployment", "registryAbi", "termsRegistryAbi", "testnetDeployment", "tokenAbi",
+      "tradingGateAbi", "validMarketCapitalization", "validMarketObservationFields", "validMarketProtocolObservation"])});
+    assert.deepEqual(names(abis), ${JSON.stringify([
+      "auctionAdapterAbi", "auctionBidRouterAbi", "auctionControllerAbi", "bidHookAbi", "ccaAuctionAbi", "ccaCheckpointAbi", "curveAbi", "launchFloorAbi",
+      "launchFloorCapAbi", "launchMinimumRaiseAbi", "openingFeeCurveAbi", "oxleyRevertAbi", "registryAbi", "termsRegistryAbi", "tokenAbi", "tradingGateAbi"])});
+    assert.deepEqual(names(auctions), ${JSON.stringify([
+      "ACCEPTED_BID_FEE_BPS", "BID_RULES", "MAX_FLOOR_PRICE_WAD", "MAX_LIVE_BIDS", "MAX_PRICE_LEVELS", "MAX_WALLET_BIDS", "MINIMUM_GROSS_RAISE", "MINIMUM_NET_RAISE",
+      "MIN_BID", "TOKEN_CAP", "acceptedBidFee", "affordableBid", "alignBidPrice", "auctionAdapterAbi", "auctionBidRouterAbi", "auctionControllerAbi", "bidDebit",
+      "bidHookAbi", "bidRefusal", "bidsRemaining", "buildAuctionBidApprovals", "buildAuctionClaim", "buildAuctionRefund", "buildDynamicBid", "buildDynamicRebid",
+      "ccaAuctionAbi", "ccaCheckpointAbi", "createOxleyAuctionClient", "decodeBidWitnesses", "decodeOxleyRevert", "encodeBidWitnesses", "launchFloorAbi",
+      "launchFloorCapAbi", "launchMinimumRaiseAbi", "liveBids", "maximumNewBid", "normalizeCheckpoints", "oxleyRevertAbi", "walletAllowance", "walletCeiling",
+      "witnessFor"])});
+    assert.deepEqual(names(launch), ${JSON.stringify([
+      "MAX_FLOOR_PRICE_WAD", "MINIMUM_GROSS_RAISE", "MINIMUM_NET_RAISE", "OFFERED_UNITS", "decodeOxleyRevert", "floorReachesMinimumRaise", "launchFloorAbi",
+      "launchFloorCapAbi", "launchMinimumRaiseAbi", "minimumRaiseFloor", "quoteAuctionFloor", "validateLaunchFloor"])});
+    assert.deepEqual(names(zeroEx), ['buildZeroExBasic', 'zeroExBasicAbi']);
+    assert.deepEqual(names(data), ['DataApiError', 'createOxleyDataClient', 'isCurrentData']);
+
+    // The bundled testnet deployment is the reviewed one, parses, and is the embedded export.
+    const parsed = sdk.parseDeployment(deployment);
+    assert.equal(parsed.chainId, 99801); assert.equal(parsed.releaseId, ${JSON.stringify("elysium-auctions-gen10-1fa4ef2a98fd14ed")});
+    assert.deepEqual(sdk.testnetDeployment, deployment);
+    assert.equal(parsed.termsRegistry.address, '0x94c8c7203e2a01e37f104fa6cbe00382642c084d');
+    assert.equal(parsed.auctionBindings.bidHook.address, '0x86f87064955204e52ad3925c9412b3a5cd07e061');
+    assert.deepEqual(parsed.bidRules, auctions.BID_RULES); assert.equal(auctions.BID_RULES.minBid, '20000000');
+    assert.throws(() => sdk.parseDeployment(template));
+    // The Gen10 rules: a 30,000 USDC net minimum raise (30,303,030,303 gross), a 1e21 floor cap, and the floor rule that follows.
+    assert.deepEqual([sdk.MINIMUM_NET_RAISE, sdk.MINIMUM_GROSS_RAISE, sdk.MAX_FLOOR_PRICE_WAD], [30000000000n, 30303030303n, 10n ** 21n]);
+    assert.equal(launch.minimumRaiseFloor(), 101010101030162826490n);
+    assert.ok(launch.floorReachesMinimumRaise(110000000000000000000n) && !launch.floorReachesMinimumRaise(100000000000000000000n));
+    assert.doesNotThrow(() => launch.validateLaunchFloor(110000000000000000000n)); assert.throws(() => launch.validateLaunchFloor(100000000000000000000n), /minimum raise/);
+    assert.ok(launch.quoteAuctionFloor(110000000000000000000n).floorPriceQ96 > 0n);
+    assert.equal(sdk.decodeOxleyRevert(encodeErrorResult({ abi: abis.launchFloorCapAbi, errorName: 'FloorPriceAboveMaximum', args: [10n ** 21n + 1n, 10n ** 21n] }))?.name, 'FloorPriceAboveMaximum');
+    // Trading, fees, terms and the opening surcharge.
+    assert.equal(sdk.minimumAmountOut(1000000n, 50), 995000n);
+    assert.equal(sdk.integratorFeeAmount(10000000n, 50), 50000n); assert.equal(sdk.MAX_INTEGRATOR_FEE_BPS, 100);
+    assert.equal(sdk.openingSurchargeWadAt(45), 8437500000000000n);
+    assert.ok(sdk.createOxleyClient && sdk.buildAcceptTerms && sdk.buildSwapWithFee && zeroEx.buildZeroExBasic);
+    // Auctions: Dynamic Bids and rebids, claims and refunds.
+    assert.ok(auctions.createOxleyAuctionClient && auctions.buildDynamicBid && auctions.buildDynamicRebid && auctions.buildAuctionClaim && auctions.buildAuctionRefund);
+    assert.equal(auctions.MIN_BID, 20000000n);
+    // Data client.
+    assert.equal(typeof data.createOxleyDataClient({ baseUrl: 'https://example.com/api/data/v1', chainId: 99801 }).tokens, 'function');
+    assert.equal(data.isCurrentData({ checkedAt: 0, freshness: 'fresh' }), false);
+    // Full compiler ABIs.
+    assert.ok([curveAbi, bidRouterAbi, bidHookAbi, termsAbi, ccaAbi].every(abi => abi.length));
+    assert.ok(abis.curveAbi.length && abis.bidHookAbi.length && abis.termsRegistryAbi.length);
   `);
   execFileSync(process.execPath, ["consumer.mjs"], { cwd: directory, stdio: "pipe" });
   writeFileSync(join(directory, "consumer.ts"), `
-    import { createOxleyClient, createOxleyMarkets, type QuoteRequest, type Swap, type SwapWithFee, type TermsStatus } from '@oxley/sdk';
+    import { createOxleyClient, testnetDeployment, type Deployment, type QuoteRequest, type Swap, type SwapWithFee, type TermsStatus } from '@oxley/sdk';
     import { buildZeroExBasic } from '@oxley/sdk/0x';
     import { createOxleyDataClient, type IndexedData, type IndexedTrade, type TokenInfo } from '@oxley/sdk/data';
-    import { createOxleyAuctionClient, type AuctionBidInput, type DynamicBidLimits } from '@oxley/sdk/auctions';
-    import { createOxleyLaunchClient, sampleSecondsPerBlock, type AuctionLaunchInput } from '@oxley/sdk/launch';
-    import { decodeOxleyRevert, isGen8Family, type DeploymentGeneration, type Gen8FamilyId, type OxleyRevert } from '@oxley/sdk';
+    import { createOxleyAuctionClient, type DynamicBidLimits, type DynamicBidRequest, type PartialFillHints } from '@oxley/sdk/auctions';
+    import { quoteAuctionFloor, validateLaunchFloor } from '@oxley/sdk/launch';
+    import { decodeOxleyRevert, type OxleyRevert } from '@oxley/sdk';
     import { createPublicClient, http } from 'viem';
-    export const client = (deployment: unknown) => createOxleyClient({ deployment,
-      publicClient: createPublicClient({ transport: http('http://localhost:8545') }) });
+    const publicClient = createPublicClient({ transport: http('http://localhost:8545') });
+    export const client = (deployment: Deployment) => createOxleyClient({ deployment, publicClient });
+    export const bundled = createOxleyClient({ deployment: testnetDeployment, publicClient });
     export const encode = (swap: Swap) => buildZeroExBasic(swap);
     export type Input = QuoteRequest;
-    export const auctions = (deployment: unknown) => createOxleyAuctionClient({ deployment,
-      publicClient: createPublicClient({ transport: http('http://localhost:8545') }) });
-    export type AuctionInput = AuctionBidInput;
-    export const launch = (deployment: unknown, input: AuctionLaunchInput) => createOxleyLaunchClient({ deployment,
-      publicClient: createPublicClient({ transport: http('http://localhost:8545') }) }).prepareLaunch(input);
-    export const gen2Bid = (deployment: unknown, dealId: \`0x\${string}\`, owner: \`0x\${string}\`) => createOxleyAuctionClient({ deployment,
-      publicClient: createPublicClient({ transport: http('http://localhost:8545') }) }).getBidAllowance({ dealId, owner });
-    export const rate = () => sampleSecondsPerBlock(createPublicClient({ transport: http('http://localhost:8545') }));
-    export const reason = (error: unknown): OxleyRevert | null => decodeOxleyRevert(error, { generation: 'gen10' });
-    export const family = (generation: DeploymentGeneration): generation is Gen8FamilyId => isGen8Family(generation);
-    export const markets = createOxleyMarkets({ publicClient: createPublicClient({ transport: http('http://localhost:8545') }) });
-    export const withFee = (request: Parameters<typeof markets.prepareSwapWithFee>[0]): Promise<SwapWithFee> => markets.prepareSwapWithFee(request);
-    export const terms = (marketId: \`0x\${string}\`, account: \`0x\${string}\`): Promise<TermsStatus> => markets.getTermsStatus({ marketId, account });
-    export const limits = (deployment: unknown, dealId: \`0x\${string}\`, owner: \`0x\${string}\`): Promise<DynamicBidLimits> => createOxleyAuctionClient({ deployment,
-      publicClient: createPublicClient({ transport: http('http://localhost:8545') }) }).getDynamicBidLimits({ dealId, owner });
+    export const auctions = (deployment: unknown) => createOxleyAuctionClient({ deployment, publicClient });
+    export const limits = (deployment: unknown, dealId: \`0x\${string}\`, owner: \`0x\${string}\`): Promise<DynamicBidLimits> =>
+      createOxleyAuctionClient({ deployment, publicClient }).getDynamicBidLimits({ dealId, owner });
+    export const bid = (deployment: unknown, request: DynamicBidRequest) => createOxleyAuctionClient({ deployment, publicClient }).prepareDynamicBid(request);
+    export const refund = (deployment: unknown, dealId: \`0x\${string}\`, caller: \`0x\${string}\`, partialFill?: PartialFillHints) =>
+      createOxleyAuctionClient({ deployment, publicClient }).prepareRefund({ dealId, bidId: 0n, caller, partialFill });
+    export const floor = (price: bigint) => { validateLaunchFloor(price); return quoteAuctionFloor(price); };
+    export const reason = (error: unknown): OxleyRevert | null => decodeOxleyRevert(error, { quoteSymbol: 'USDC' });
+    export const withFee = (request: Parameters<typeof bundled.prepareSwapWithFee>[0]): Promise<SwapWithFee> => bundled.prepareSwapWithFee(request);
+    export const terms = (account: \`0x\${string}\`): Promise<TermsStatus> => bundled.getTermsStatus(account);
     export const data = createOxleyDataClient({ baseUrl: 'https://example.com/api/data/v1', chainId: 99801 });
     export const trades: (id: \`0x\${string}\`) => Promise<IndexedData<IndexedTrade>> =
       dealId => data.trades({ dealId, from: 100, to: 200 });

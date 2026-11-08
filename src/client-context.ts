@@ -1,6 +1,6 @@
 import { keccak256 } from "viem";
-import { curveAbi, tokenAbi } from "./abis.js";
-import { openingFeeCurveAbi } from "./gen3-abis.js";
+import { curveAbi } from "./curve-abis.js";
+import { tokenAbi } from "./abis.js";
 import { check, sameAddress, uint } from "./validation.js";
 import type { Anchor, Deployment, RpcClient } from "./types.js";
 
@@ -22,10 +22,9 @@ export function createClientContext(rpc: RpcClient, deployment: Deployment) {
     check(block.hash === anchor.blockHash, "REORG", "Quote/discovery block changed; discard results and retry");
   }
 
-  // Gen3/Gen8 curves enforce one immutable terms registry; the manifest pin must be that exact contract.
+  // The curve enforces one immutable terms registry; the manifest pin must be that exact contract.
   async function verifyTermsBinding(anchor: Anchor): Promise<void> {
-    if (!deployment.termsRegistry) return;
-    const bound = await rpc.readContract({ address: deployment.curve.address, abi: openingFeeCurveAbi,
+    const bound = await rpc.readContract({ address: deployment.curve.address, abi: curveAbi,
       functionName: "termsRegistry", blockNumber: anchor.blockNumber });
     check(sameAddress(bound, deployment.termsRegistry.address), "TERMS_BINDING_MISMATCH", "Curve terms registry does not match the manifest");
   }
@@ -33,7 +32,7 @@ export function createClientContext(rpc: RpcClient, deployment: Deployment) {
   // Immutable deployments are checked at connection; callers can explicitly recheck at any time.
   let verified: Promise<void> | undefined;
   async function verifyAt(anchor: Anchor): Promise<void> {
-    const pins = [deployment.curve, deployment.registry, deployment.quoteToken, ...deployment.termsRegistry ? [deployment.termsRegistry] : []];
+    const pins = [deployment.curve, deployment.registry, deployment.quoteToken, deployment.termsRegistry];
     await Promise.all(pins.map(async pin => {
       const code = await rpc.getCode({ address: pin.address, blockNumber: anchor.blockNumber });
       check(code && code !== "0x" && keccak256(code).toLowerCase() === pin.runtimeCodeHash.toLowerCase(),

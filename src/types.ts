@@ -1,15 +1,13 @@
 import type { Address, Hex, PublicClient } from "viem";
-import type { Gen8FamilyId } from "./gen8-family.js";
+import type { BID_RULES } from "./bid-rules.js";
 
 export type RpcClient = Pick<PublicClient, "getChainId" | "getBlock" | "getCode" | "readContract" | "getLogs" | "call" | "estimateGas">;
 export interface ContractPin { readonly address: Address; readonly runtimeCodeHash: Hex }
 /**
- * Contract generation of a release. An absent manifest field means the deployed flat-fee release. Gen3 and the Gen8 family
- * (Gen8, Gen9, Gen10) also require the caller to have accepted the terms in the bound terms registry; the Gen8 family is the
- * quote-only curve with Dynamic Bids. Gen9 is the Gen8 stack redeployed with a launch floor cap; Gen10 is the Gen9 stack with a
- * $30,000 net minimum raise (Gen8 and Gen9: $50,000). Each keeps its own identity.
+ * The reviewed deployment manifest: every contract the clients read, pinned by address and runtime code hash. The curve and the Dynamic Bids hook
+ * enforce the terms registry, the controller caps the launch floor and requires a 30,000 USDC net minimum raise, and `bidRules` are the exact
+ * compiled per-wallet bid rules (all verified against the chain by `verifyDeployment`).
  */
-export type DeploymentGeneration = "flat-fee" | "gen2" | "gen3" | Gen8FamilyId;
 export interface Deployment {
   readonly schemaVersion: 1;
   readonly releaseId: string;
@@ -20,11 +18,19 @@ export interface Deployment {
   readonly registry: ContractPin;
   readonly quoteToken: ContractPin & { readonly symbol: "USDC" | "Oxy-USDC"; readonly decimals: 6 };
   readonly auctionController: Address;
-  /** Absent: flat-fee. "gen2": exact-duration launches, breadth bid rule and trading gate. "gen3" and the Gen8 family ("gen8", "gen9", "gen10"): terms-gated curves. */
-  readonly generation?: DeploymentGeneration;
-  /** Required exactly for "gen3" and the Gen8 family: the end-user terms registry the curve (and the Gen8-family bid hook) enforces. */
-  readonly termsRegistry?: ContractPin;
-  /** Informational release status, e.g. "planned-fork-addresses"; runtime pins remain authoritative. */
+  /** The end-user terms registry the curve and the Dynamic Bids hook enforce. */
+  readonly termsRegistry: ContractPin;
+  readonly auctionBindings: {
+    readonly controllerRuntimeCodeHash: Hex;
+    readonly bidRouter: ContractPin;
+    readonly adapter: ContractPin;
+    /** The Dynamic Bids hook. */
+    readonly bidHook: ContractPin;
+    readonly exposureHelper: ContractPin;
+  };
+  /** The exact compiled bid rules; any other value is refused. */
+  readonly bidRules: typeof BID_RULES;
+  /** Informational release status, e.g. "live"; runtime pins remain authoritative. */
   readonly status?: string;
   readonly note?: string;
 }
@@ -37,8 +43,6 @@ export interface Market {
   readonly activatedAt: bigint;
   readonly quoteToken: Address;
   readonly curve: Address;
-  /** Contract generation of the curve that holds the market; absent on hand-built markets, which mean flat-fee. */
-  readonly generation?: DeploymentGeneration;
 }
 export interface QuoteRequest {
   marketId: Hex;
@@ -63,8 +67,8 @@ export interface Quote extends Anchor {
   readonly feeAmount: bigint;
   readonly feeToken: Address;
   /**
-   * Gen3 and Gen8-family buys: the decaying opening surcharge rate (WAD, 1e18 = 100%) the curve applied at the quote block; it is already
-   * inside `feeAmount`. Execution happens later, so the charged rate can only be lower. Absent for other quotes.
+   * Buys only: the decaying opening surcharge rate (WAD, 1e18 = 100%) the curve applied at the quote block; it is already inside
+   * `feeAmount`. Execution happens later, so the charged rate can only be lower.
    */
   readonly openingSurchargeWad?: bigint;
 }

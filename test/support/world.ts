@@ -1,68 +1,58 @@
 import type { Address, Hex } from "viem";
-import { addr, BASES, id32, isQuoteOnly, mockRpc, type Generation, type ReadCall } from "./chain.js";
+import { addr, BASE, id32, mockRpc, type ReadCall } from "./chain.js";
 
-/** The three generations bundled with 0.6.0-next.1 (Gen10 joined the bundle in 0.6.0-next.3). */
-export const GENERATIONS: Generation[] = ["flat-fee", "gen3", "gen8"];
-/** Every generation the model knows: the bundled ones, Gen9 (supported, its live manifest is not bundled) and Gen10 (bundled; the model uses synthetic addresses for both). */
-export const ALL_GENERATIONS: Generation[] = [...GENERATIONS, "gen9", "gen10"];
 const QUOTE = addr(3), ZERO = addr(0);
-interface Market { generations: Generation[]; coin: Address; creator: Address; active: boolean }
+export const [CURVE, REGISTRY, CONTROLLER, TERMS] = [addr(BASE + 1), addr(BASE + 2), addr(BASE + 4), addr(BASE + 5)];
+interface Market { coin: Address; creator: Address; active: boolean }
 export interface TermsState { required: bigint; latest: bigint; hash: Hex; uri: string; accepted: Map<string, bigint>; hasAcceptedOverride?: boolean }
 
 function newState() {
   return {
     markets: new Map<string, Market>(),
     open: true, fallbackAt: 1300n, paused: false,
-    buy: { out: 900_000n, fee: 20_000n }, sell: { out: 900_000n, fee: 20_000n, collateral: 0n }, surcharge: 0n,
+    buy: { out: 900_000n, fee: 20_000n }, sell: { out: 900_000n, fee: 20_000n }, surcharge: 0n,
     balances: new Map<string, bigint>(), allowances: new Map<string, bigint>(),
     terms: { required: 0n, latest: 0n, hash: id32(77), uri: "ipfs://terms", accepted: new Map() } as TermsState,
-    curveTerms: new Map<Generation, Address>(), failures: new Map<string, Error>(),
-    quoteCallers: [] as Address[], quoted: [] as { side: string; amount: bigint }[], callError: undefined as Error | undefined,
+    curveTerms: TERMS as Address, failures: new Map<string, Error>(),
+    quote: QUOTE as Address, quoteDecimals: 6, deal: { profile: 1, status: 3, controller: CONTROLLER as Address },
+    logs: [] as { removed: boolean; args: { dealId: Hex } }[], logCalls: 0, logRequests: [] as { address: Address; event: { name: string } }[],
+    quoted: [] as { side: string; amount: bigint }[], callError: undefined as Error | undefined,
   };
 }
 type State = ReturnType<typeof newState>;
-const own = (w: State, generation: Generation, id: Hex | undefined) => {
-  const m = id ? w.markets.get(id.toLowerCase()) : undefined;
-  return m && m.generations.includes(generation) ? m : undefined;
-};
+const own = (w: State, id: Hex | undefined) => id ? w.markets.get(id.toLowerCase()) : undefined;
 function token(w: State, call: ReadCall): unknown {
   const [owner, spender] = call.args as Address[];
   const handlers: Record<string, () => unknown> = {
-    decimals: () => call.address === QUOTE ? 6 : 18,
+    decimals: () => call.address === QUOTE ? w.quoteDecimals : 18,
     balanceOf: () => w.balances.get(`${call.address}:${owner}`.toLowerCase()) ?? 2_000_000n,
     allowance: () => w.allowances.get(`${call.address}:${owner}:${spender}`.toLowerCase()) ?? 0n,
   };
   return (handlers[call.functionName] ?? (() => { throw new Error(`Unexpected token read ${call.functionName}`); }))();
 }
-function curveMarket(w: State, generation: Generation, id: Hex | undefined) {
-  const market = own(w, generation, id), reserve = isQuoteOnly(generation) ? {} : { reserveAsset: market ? QUOTE : ZERO };
-  return market ? { coin: market.coin, creator: market.creator, activatedAt: 100n, active: market.active, ...reserve }
-    : { coin: ZERO, creator: ZERO, activatedAt: 0n, active: false, ...reserve };
+function curveMarket(w: State, id: Hex | undefined) {
+  const market = own(w, id);
+  return market ? { coin: market.coin, creator: market.creator, activatedAt: 100n, active: market.active }
+    : { coin: ZERO, creator: ZERO, activatedAt: 0n, active: false };
 }
-function curve(w: State, generation: Generation, call: ReadCall): unknown {
-  const [id, amount, who] = call.args as [Hex | undefined, bigint, Address];
+function curve(w: State, call: ReadCall): unknown {
+  const [id, amount] = call.args as [Hex | undefined, bigint];
   const quoteBuy = () => {
     if (w.paused) throw new Error("BuysPaused");
     w.quoted.push({ side: "buy", amount });
-    if (!isQuoteOnly(generation)) w.quoteCallers.push(who);
     return [w.buy.out, w.buy.fee];
   };
-  const quoteSell = () => {
-    w.quoted.push({ side: "sell", amount });
-    if (!isQuoteOnly(generation)) w.quoteCallers.push(who);
-    return isQuoteOnly(generation) ? [w.sell.out, w.sell.fee] : [w.sell.out, w.sell.collateral, w.sell.fee];
-  };
+  const quoteSell = () => { w.quoted.push({ side: "sell", amount }); return [w.sell.out, w.sell.fee]; };
   const handlers: Record<string, () => unknown> = {
-    quoteAsset: () => QUOTE, termsRegistry: () => w.curveTerms.get(generation) ?? addr(BASES[generation] + 5),
-    market: () => curveMarket(w, generation, id), quoteBuy, quoteSell,
+    quoteAsset: () => w.quote, termsRegistry: () => w.curveTerms, market: () => curveMarket(w, id), quoteBuy, quoteSell,
     tradingOpen: () => w.open, tradingFallbackAt: () => w.fallbackAt, openingSurchargeWad: () => w.surcharge,
   };
   return (handlers[call.functionName] ?? (() => { throw new Error(`Unexpected curve read ${call.functionName}`); }))();
 }
-function registry(w: State, generation: Generation, call: ReadCall): unknown {
-  const market = own(w, generation, call.args[0] as Hex);
+function registry(w: State, call: ReadCall): unknown {
+  const market = own(w, call.args[0] as Hex);
   if (call.functionName !== "deal") throw new Error(`Unexpected registry read ${call.functionName}`);
-  return market ? { creator: market.creator, coin: market.coin, controller: addr(BASES[generation] + 4), reserveAsset: QUOTE, profile: 1, status: 3 }
+  return market ? { creator: market.creator, coin: market.coin, controller: w.deal.controller, reserveAsset: QUOTE, profile: w.deal.profile, status: w.deal.status }
     : { creator: ZERO, coin: ZERO, controller: ZERO, reserveAsset: ZERO, profile: 0, status: 0 };
 }
 function terms(w: State, call: ReadCall): unknown {
@@ -78,25 +68,23 @@ function readWorld(w: State, call: ReadCall): unknown {
   const failure = w.failures.get(`${call.address.toLowerCase()}:${call.functionName}`);
   if (failure) throw failure;
   if (call.address === QUOTE || (BigInt(call.address) >= 100n && BigInt(call.address) < 200n)) return token(w, call);
-  for (const generation of ALL_GENERATIONS) {
-    const base = BASES[generation];
-    if (call.address === addr(base + 1)) return curve(w, generation, call);
-    if (call.address === addr(base + 2)) return registry(w, generation, call);
-    if (call.address === addr(base + 5)) return terms(w, call);
-  }
+  if (call.address === CURVE) return curve(w, call);
+  if (call.address === REGISTRY) return registry(w, call);
+  if (call.address === TERMS) return terms(w, call);
   throw new Error(`Unexpected read ${call.address} ${call.functionName}`);
 }
 
-/** A small model of the curves (flat-fee, Gen3, Gen8, Gen9 and Gen10; a test registers the ones it needs) that answers the views the SDK reads. Every knob is a plain field a test can change. */
+/** A small model of the curve, registry and terms registry that answers the views the trading client reads. Every knob is a plain field a test can change. */
 export function createWorld() {
   const w = newState();
   const coinOf = (n: number) => addr(100 + n);
-  function addMarket(generation: Generation | Generation[], n: number, active = true) {
+  function addMarket(n: number, active = true) {
     const id = id32(1000 + n);
-    w.markets.set(id.toLowerCase(), { generations: [generation].flat(), coin: coinOf(n), creator: addr(7), active });
+    w.markets.set(id.toLowerCase(), { coin: coinOf(n), creator: addr(7), active });
     return { id, coin: coinOf(n) };
   }
-  const rpc = mockRpc(call => readWorld(w, call), { onCall: () => { if (w.callError) throw w.callError; } });
+  const rpc = mockRpc(call => readWorld(w, call), { onCall: () => { if (w.callError) throw w.callError; }, logs: () => { w.logCalls++; return w.logs; },
+    onLogs: request => { w.logRequests.push(request as (typeof w.logRequests)[number]); } });
   return { ...rpc, world: w, addMarket, coinOf };
 }
 export type World = ReturnType<typeof createWorld>;

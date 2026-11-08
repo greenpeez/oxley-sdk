@@ -1,5 +1,5 @@
 import { tokenAbi } from "./abis.js";
-import { encodeCurveTrade } from "./curve-profile.js";
+import { encodeCurveTrade } from "./curve.js";
 import { buildApprovals, buildSwap } from "./transactions.js";
 import { check, sameAddress, uint } from "./validation.js";
 import type { Anchor, Quote, QuoteRequest, Swap } from "./types.js";
@@ -47,8 +47,8 @@ export function createSwapPreparer(context: ClientContext, quoteReader: QuoteRea
   }
 
   /**
-   * Current price/funding checks. `termsAccepted` is true when the curve has no terms or the caller has accepted them;
-   * simulation additionally requires it, because an unaccepted caller's trade reverts.
+   * Current price/funding checks. `termsAccepted` is true when the caller has accepted the terms the registry enforces (or it
+   * enforces none yet); simulation additionally requires it, because an unaccepted caller's trade reverts.
    */
   async function checkSwap(swap: Swap, simulate = false) {
     const { anchor, current } = await checker.requote(swap);

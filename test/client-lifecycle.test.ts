@@ -1,19 +1,12 @@
 import assert from "node:assert/strict";
 import { setImmediate } from "node:timers/promises";
 import { test } from "node:test";
-import { keccak256, toHex, type Address, type Hex } from "viem";
-import { createOxleyClient, OxleyError, type Deployment, type RpcClient } from "../src/index.js";
+import { toHex, type Address, type Hex } from "viem";
+import { createOxleyClient, OxleyError, type RpcClient } from "../src/index.js";
+import { addr, blockHash, manifest, runtime } from "./support/chain.js";
 
-const addr = (value: number) => toHex(value, { size: 20 });
 const id = toHex(0xabcdn, { size: 32 });
-const runtime = "0x60006000" as Hex;
-const blockHash = toHex(456n, { size: 32 });
-const pin = (value: number) => ({ address: addr(value), runtimeCodeHash: keccak256(runtime) });
-const deployment: Deployment = {
-  schemaVersion: 1, releaseId: "client-lifecycle", chainId: 31337, network: "testnet", startBlock: "1",
-  curve: pin(1), registry: pin(2),
-  quoteToken: { ...pin(3), symbol: "Oxy-USDC", decimals: 6 }, auctionController: addr(4),
-};
+const deployment = manifest({ releaseId: "client-lifecycle" });
 
 function deferred() {
   let resolve!: () => void;
@@ -43,12 +36,18 @@ function fixture() {
       assert.equal(input.blockNumber, 100n);
       switch (input.functionName) {
         case "quoteAsset": state.quoteBindingReads++; return addr(3);
+        case "termsRegistry": return deployment.termsRegistry.address;
+        case "requiredVersion": case "latestVersion": case "acceptedVersion": return 0n;
+        case "hasAccepted": return true;
+        case "tradingOpen": return true;
+        case "tradingFallbackAt": return 1300n;
+        case "openingSurchargeWad": return 0n;
         case "decimals": return input.address === addr(3) ? 6 : 18;
-        case "deal": return { creator: addr(7), coin: addr(5), controller: addr(4), reserveAsset: addr(3), profile: 1, status: 3 };
+        case "deal": return { creator: addr(7), coin: addr(5), controller: deployment.auctionController, reserveAsset: addr(3), profile: 1, status: 3 };
         case "market":
           state.marketReads++;
           if (state.marketError) throw state.marketError;
-          return { active: true, creator: addr(7), coin: addr(5), reserveAsset: addr(3), activatedAt: 100n };
+          return { active: true, creator: addr(7), coin: addr(5), activatedAt: 100n };
         case "quoteBuy": {
           assert.ok(input.args);
           const amount = input.args[1];
@@ -80,7 +79,7 @@ test("concurrent client operations share verification, retain it across methods 
   ]);
   try {
     await setImmediate();
-    assert.equal(state.codeReads, 3);
+    assert.equal(state.codeReads, 4);
     assert.equal(state.marketReads, 0);
   } finally { gate.resolve(); }
   await operations;
@@ -88,12 +87,12 @@ test("concurrent client operations share verification, retain it across methods 
   const swap = await sdk.prepareSwap({ ...request, slippageBps: 50 });
   await sdk.checkSwap(swap);
   await sdk.quoteMany([request]);
-  assert.equal(state.codeReads, 3);
+  assert.equal(state.codeReads, 4);
   await sdk.verifyDeployment();
-  assert.equal(state.codeReads, 6);
+  assert.equal(state.codeReads, 8);
   assert.equal(state.quoteBindingReads, 2);
   await sdk.quote(request);
-  assert.equal(state.codeReads, 6);
+  assert.equal(state.codeReads, 8);
 });
 
 test("failed shared verification rejects every observer and is retried on the next operation", async () => {
@@ -107,12 +106,12 @@ test("failed shared verification rejects every observer and is retried on the ne
       assert.equal(result.reason.code, "CODE_MISMATCH");
     }
   }
-  assert.equal(state.codeReads, 3);
+  assert.equal(state.codeReads, 4);
   assert.equal(state.marketReads, 0);
   state.code = runtime;
   await sdk.getMarket(id);
   await sdk.quote(request);
-  assert.equal(state.codeReads, 6);
+  assert.equal(state.codeReads, 8);
   assert.equal(state.quoteBindingReads, 1);
 });
 

@@ -1,9 +1,8 @@
 # Public Indexed Data API
 
-Published baseline: `@oxley/sdk@0.5.0-next.4`, exported from `@oxley/sdk/data` (introduced in `0.5.0-next.1`). The local unreleased candidate adds the corrections documented below; it has not been published or deployed.
+Read-only indexed data, exported from `@oxley/sdk/data` (`createOxleyDataClient`, `isCurrentData`, `DataApiError`).
 Public API root: `https://app.oxley.fun/api/data/v1`.
 Network: Elysium testnet, chain `99801`, Oxy-USDC. Mainnet is not enabled.
-Version `0.5.0-next.0` does not export `/data`. The published baseline described here was the default `latest` release at its recorded publication; legacy consumers can explicitly pin `0.4.1`. This local review does not attest the current package-registry tag.
 
 ## Access
 
@@ -99,7 +98,7 @@ output; do not sum them naively to replace the indexed volume series.
 
 `GET /tokens?ids=<dealId>,<dealId>` answers what an app needs to draw a token next to its price: the name and symbol
 the market was launched with, the description and social links its creator saved, and its image. It is a read-only
-display resource for every market the app lists (Gen3, Gen8, Gen9 and Gen10 alike); no contract read or wallet is needed.
+display resource for every market the app lists; no contract read or wallet is needed.
 
 ```json
 { "items": [{
@@ -140,7 +139,7 @@ const byDeal = new Map(items.map(token => [token.dealId, token]));
 ## Freshness And Pagination
 
 Every response includes `apiVersion`, `source: "indexed"`, chain/release identity,
-`generation`, `indexedBlock`, `indexedBlockHash`, `checkedAt`, `freshness`, and
+`generation` (the feed's reorg counter), `indexedBlock`, `indexedBlockHash`, `checkedAt`, `freshness`, and
 `quoteToken`. `indexedTimestamp` is supplied where the underlying feed has it.
 `checkedAt` is observation time, not the time the API request completed.
 
@@ -179,8 +178,8 @@ Bid `status` is text such as `active` or `exited`; treat unknown values as opaqu
 
 Paginated endpoints return `hasMore` and opaque `nextCursor`. Cursors are opaque `ox1.…` strings: pass the cursor
 unchanged with the same filters and fixed `from`/`to`, even after an empty page.
-Continue only while `hasMore` is true. Do not decode cursors, combine different
-generations, or assume separate resources share a snapshot. On `409 CURSOR_STALE`,
+Continue only while `hasMore` is true. Do not decode cursors, mix cursors across
+filters or ranges, or assume separate resources share a snapshot. On `409 CURSOR_STALE`,
 discard that traversal and restart at page one. For a recent activity refresh,
 start a new traversal and deduplicate trades by chain/transactionHash/logIndex.
 Auction activity is only a latest-50 window, not a complete paginated audit log.
@@ -222,7 +221,7 @@ approved indexer/contract/USDC configuration and mainnet-specific release
 validation; changing the SDK chainId alone does not enable it. Trading calldata
 stays in the existing trading client, not in the display-data API.
 
-## Local candidate corrections (25 October 2026; not published or deployed)
+## Platform Mitigation And Freshness Rules
 
 The prepared SDK classifies `PLATFORM_CHALLENGE` separately for platform JSON and
 HTML responses, including `x-vercel-mitigated: challenge`. A platform response can
@@ -244,7 +243,7 @@ The standalone SDK's per-read cancellation also works without `AbortSignal.any`
 or `AbortSignal.timeout`. It releases its timer and caller listener on completion
 and fences late results. It does not polyfill globals or change wallet lifetimes.
 
-`isCurrentData()` now requires canonical indexed hash/block evidence, a matching
+`isCurrentData()` requires canonical indexed hash/block evidence, a matching
 finalized block, zero finalized backlog, recent indexed/checked/latest times and
 an available non-regressed latest head. All relevant observations must be no more
 than 180 seconds old (at most 30 seconds in the future). Missing evidence is not
@@ -257,27 +256,21 @@ current. This is display/read freshness, never permission to execute a transacti
   stale. `checkedAt` does not refresh `indexedTimestamp`.
 
 The envelope's `releaseId` identifies the feed; numeric `generation` is its reorg
-counter. Neither is a market deployment generation. Additive `feedIdentity` keeps
+counter. Neither names a contract release. Additive `feedIdentity` keeps
 those facts explicit. `deploymentIdentity` is separate and nullable; canonical
 market rows can carry controller/adapter/curve/quote addresses and runtime hashes,
 plus their observation block/hash. Unknown deployment release names stay null.
 Exact history endpoints may require an exact auction/market lookup to obtain the
 binding. Verify those bindings against a reviewed manifest and fresh chain reads
 before transaction preparation; do not rename the feed release to make a string
-comparison pass. Existing published releases retain their original meaning.
+comparison pass.
 
-## Resolving An Indexed Market For Trading
+## Trading An Indexed Market
 
-Display rows never authorize a transaction. To trade a market from a catalog row, pass its
-`dealId` to `createOxleyMarkets().resolveMarket(dealId, { identity })` from the main package, where
-`identity` is the row's `deploymentIdentity` when it is present (often it is `null`; then omit it).
-A `source: "verified-binding"` identity (with `releaseId` such as `elysium-auctions-gen3-aac49c62c3855f41` or
-`elysium-auctions-gen8-969bd0e317da4145`, plus controller, adapter, curve and quote addresses with runtime
-hashes) must match the reviewed curve, controller and quote token (`releaseId` is informational and is not
-compared), but it is still an HTTP claim: the SDK verifies the runtime hashes through your RPC before preparing
-anything. The identity only selects which reviewed curve to ask; the chain must still list the deal as an
-active, registered market of that generation, otherwise resolution fails (`IDENTITY_MISMATCH`,
-`UNKNOWN_DEPLOYMENT` or `UNSUPPORTED_MARKET`). See [current markets](markets.md). Markets on older,
-unreviewed curves (for example the original bonded-v2 launches) appear in indexed catalogs but are
-not tradable through this SDK.
-
+Display rows never authorize a transaction. To trade a market from a catalog row, pass its `dealId` to
+the trading client's `getMarket(dealId)` ([markets](markets.md)), which checks on chain that the deal is an
+active, registered market of the one deployment the client is bound to; anything else is `UNSUPPORTED_MARKET`.
+A row's `deploymentIdentity`, when present (often it is `null`), is an HTTP claim: it can help you notice a
+row from another deployment (compare its curve, controller and quote addresses with your manifest), but it
+never replaces the on-chain check. Markets on curves this SDK has no reviewed manifest for appear in indexed
+catalogs but are not tradable through it.

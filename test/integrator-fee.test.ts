@@ -3,16 +3,16 @@ import { test } from "node:test";
 import { decodeFunctionData, type Address } from "viem";
 import { buildSwapWithFee, createOxleyClient, integratorFeeAmount, eip5792Batch, MAX_INTEGRATOR_FEE_BPS, OxleyError, tokenAbi,
   SEQUENTIAL_FEE_WARNING, type SwapWithFee } from "../src/index.js";
-import { addr, BASES, full, manifest, type Generation } from "./support/chain.js";
-import { createWorld } from "./support/world.js";
+import { addr, full, manifest } from "./support/chain.js";
+import { CURVE, createWorld } from "./support/world.js";
 
 const caller = addr(8), recipient = addr(50);
 const code = (expected: string) => (error: unknown) => error instanceof OxleyError && error.code === expected;
 const kinds = (prepared: SwapWithFee) => prepared.calls.map(call => call.kind);
-function setup(generation: Generation = "gen3") {
+function setup() {
   const chain = createWorld();
-  const market = chain.addMarket(generation, 1), curve = addr(BASES[generation] + 1);
-  const sdk = createOxleyClient({ publicClient: chain.rpc, deployment: manifest(generation, BASES[generation]) });
+  const market = chain.addMarket(1), curve = CURVE;
+  const sdk = createOxleyClient({ publicClient: chain.rpc, deployment: manifest() });
   const buy = { marketId: market.id, tokenIn: addr(3), tokenOut: market.coin, amountIn: 10_000_000n, caller, slippageBps: 100, feeRecipient: recipient, feeBps: 50 };
   const sell = { ...buy, tokenIn: market.coin, tokenOut: addr(3), amountIn: 10n ** 18n };
   const allow = (token: Address, amount: bigint) => chain.world.allowances.set(`${token}:${caller}:${curve}`, amount);
@@ -30,7 +30,7 @@ test("a buy pays the fee first, approves exactly the net amount, then trades the
   const [fee, approve, trade] = prepared.calls.map(call => call.transaction);
   assert.deepEqual([fee!.to, fee!.value, transfer(fee!.data).functionName, transfer(fee!.data).args], [addr(3), 0n, "transfer", [recipient, 50_000n]]);
   assert.deepEqual([approve!.to, transfer(approve!.data).args], [addr(3), [curve, 9_950_000n]]);
-  const decoded = decodeFunctionData({ abi: full("ElysiumReserveCurveGen3"), data: trade!.data });
+  const decoded = decodeFunctionData({ abi: full("curve"), data: trade!.data });
   assert.deepEqual([trade!.to, decoded.functionName, decoded.args], [curve, "buy", [market.id, 9_950_000n, 891_000n, 1300n]]);
   assert.deepEqual(prepared.spend, { token: addr(3), amount: 10_000_000n });
   assert.deepEqual(prepared.receive, { token: market.coin, expected: 900_000n, minimum: 891_000n });
@@ -46,14 +46,14 @@ test("allowances decide the approval calls: none when sufficient, a reset first 
   assert.deepEqual([reset.calls[1], reset.calls[2]].map(call => transfer(call!.transaction.data).args![1]), [0n, 9_950_000n]);
 });
 test("a sell trades first, then pays the fee computed on the guaranteed minimum output", async () => {
-  const { sdk, sell, curve, market } = setup("gen8");
+  const { sdk, sell, curve, market } = setup();
   const prepared = await sdk.prepareSwapWithFee(sell);
   assert.deepEqual(kinds(prepared), ["approve", "trade", "fee-transfer"]);
   // minimum = floor(900000 * 0.99) = 891000; fee = floor(891000 * 50 / 10000) = 4455, never more than the minimum can pay.
   assert.deepEqual(prepared.fee, { recipient, bps: 50, token: addr(3), amount: 4_455n, basis: "minimum-output", basisAmount: 891_000n });
   const [approve, trade, fee] = prepared.calls.map(call => call.transaction);
   assert.deepEqual([approve!.to, transfer(approve!.data).args], [market.coin, [curve, 10n ** 18n]]);
-  const decoded = decodeFunctionData({ abi: full("ElysiumCurveGen8"), data: trade!.data });
+  const decoded = decodeFunctionData({ abi: full("curve"), data: trade!.data });
   assert.deepEqual([decoded.functionName, decoded.args], ["sell", [market.id, 10n ** 18n, 891_000n, 1300n]]);
   assert.deepEqual([fee!.to, transfer(fee!.data).args], [addr(3), [recipient, 4_455n]]);
   assert.deepEqual(prepared.spend, { token: market.coin, amount: 10n ** 18n });
@@ -86,8 +86,8 @@ test("the recipient can be neither zero nor the curve, a token or any Oxley cont
   const { coin } = market;
   await assert.rejects(sdk.prepareSwapWithFee({ ...buy, feeRecipient: addr(0) }), code("INVALID_ADDRESS"));
   await assert.rejects(sdk.prepareSwapWithFee({ ...buy, feeRecipient: "0x1234" as Address }), code("INVALID_ADDRESS"));
-  // curve 11, registry 12, quote token 3, controller 14, terms registry 15, bid router 16, adapter 17, the market's coin.
-  for (const forbidden of [addr(11), addr(12), addr(3), addr(14), addr(15), addr(16), addr(17), coin]) {
+  // curve 21, registry 22, quote token 3, controller 24, terms registry 25, bid router 26, adapter 27, bid hook 28, exposure helper 29, the market's coin.
+  for (const forbidden of [addr(21), addr(22), addr(3), addr(24), addr(25), addr(26), addr(27), addr(28), addr(29), coin]) {
     await assert.rejects(sdk.prepareSwapWithFee({ ...buy, feeRecipient: forbidden }), code("INVALID_FEE_RECIPIENT"), forbidden);
   }
   // A wallet that is also the integrator is allowed (for example when testing with one account).
@@ -186,8 +186,8 @@ test("simulation covers the trade only and needs funds, approvals and accepted t
   assert.equal((await sdk.checkSwapWithFee(ready)).termsAccepted, false);
 });
 test("a batch prepared for one deployment is refused by another", async () => {
-  const { sdk, buy } = setup("gen3");
+  const { sdk, buy } = setup();
   const prepared = await sdk.prepareSwapWithFee(buy);
-  const other = createOxleyClient({ publicClient: setup("gen8").rpc, deployment: manifest("gen8", BASES.gen8) });
+  const other = createOxleyClient({ publicClient: setup().rpc, deployment: manifest({ releaseId: "another-release" }) });
   await assert.rejects(other.checkSwapWithFee(prepared), code("SWAP_MISMATCH"));
 });

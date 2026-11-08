@@ -2,15 +2,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { decodeFunctionData, maxUint128, type Hex } from "viem";
 import { acceptedBidFee, affordableBid, alignBidPrice, bidDebit, bidRefusal, bidsRemaining, buildDynamicBid, buildDynamicRebid, decodeBidWitnesses,
-  encodeBidWitnesses, liveBids, maximumNewBid, normalizeCheckpoints, walletAllowance, walletCeiling, witnessFor, GEN8_TOKEN_CAP, GEN8_MIN_BID,
-  type Gen8Position, type Gen8WalletLimits } from "../src/auctions.js";
-import { gen8MinimumGrossRaise, OxleyError } from "../src/index.js";
+  encodeBidWitnesses, liveBids, maximumNewBid, normalizeCheckpoints, walletAllowance, walletCeiling, witnessFor, TOKEN_CAP, MIN_BID,
+  type BidPosition, type WalletLimits } from "../src/auctions.js";
+import { MINIMUM_GROSS_RAISE, OxleyError } from "../src/index.js";
 import { addr, full, id32 } from "./support/chain.js";
 
 const code = (expected: string) => (error: unknown) => error instanceof OxleyError && error.code === expected;
-const position = (bidId: bigint, extra: Partial<Gen8Position> = {}): Gen8Position => ({ bidId, amountUnits: 1n, maxPriceQ96: 1n, exited: false, outbid: false, ...extra });
-const limits = (extra: Partial<Gen8WalletLimits> = {}): Gen8WalletLimits => ({ creatorExcluded: false, termsAccepted: true, positions: [], allowance: 500_000_000n,
-  balance: 1_000_000_000n, minimumBid: GEN8_MIN_BID, ...extra });
+const position = (bidId: bigint, extra: Partial<BidPosition> = {}): BidPosition => ({ bidId, amountUnits: 1n, maxPriceQ96: 1n, exited: false, outbid: false, ...extra });
+const limits = (extra: Partial<WalletLimits> = {}): WalletLimits => ({ creatorExcluded: false, termsAccepted: true, positions: [], allowance: 500_000_000n,
+  balance: 1_000_000_000n, minimumBid: MIN_BID, ...extra });
 
 test("the accepted-bid fee is 0.1% rounded down, and the affordable principal is exact at every balance", () => {
   assert.deepEqual([acceptedBidFee(100_000_000n), acceptedBidFee(19_999n), acceptedBidFee(1n), bidDebit(100_000_000n)], [100_000n, 19n, 0n, 100_100_000n]);
@@ -23,25 +23,25 @@ test("the accepted-bid fee is 0.1% rounded down, and the affordable principal is
   assert.throws(() => affordableBid(-1n), code("INVALID_AMOUNT"));
 });
 test("a wallet's ceiling and allowance follow the hook's formulas", () => {
-  // Minimum gross raise 50,505.050505 USDC: a tenth, rounded up, until others commit more than nine times the ceiling.
+  // The formula for any minimum gross raise: a tenth, rounded up, until others commit more than nine times the ceiling (here 50,505.050505 USDC).
   assert.equal(walletCeiling(50_505_050_505n, 0n), 5_050_505_051n);
   assert.equal(walletCeiling(50_505_050_505n, 45_454_545_454n), 5_050_505_051n);
   assert.equal(walletCeiling(50_505_050_505n, 45_454_545_459n), 5_050_505_051n);
   assert.equal(walletCeiling(50_505_050_505n, 100_000_000_000n), 11_111_111_111n);
   assert.equal(walletCeiling(10n, 0n), 1n);
-  // Gen10's minimum gross raise is 30,303.030303 USDC ($30,000 net): the opening ceiling is $3,030.303031 until others commit more than nine times it.
-  assert.equal(gen8MinimumGrossRaise("gen10"), 30_303_030_303n); assert.equal(gen8MinimumGrossRaise("gen9"), 50_505_050_505n);
-  assert.equal(walletCeiling(gen8MinimumGrossRaise("gen10"), 0n), 3_030_303_031n);
-  assert.equal(walletCeiling(gen8MinimumGrossRaise("gen10"), 27_272_727_272n), 3_030_303_031n);
-  assert.equal(walletCeiling(gen8MinimumGrossRaise("gen10"), 27_272_727_288n), 3_030_303_032n);
-  assert.equal(walletCeiling(gen8MinimumGrossRaise("gen10"), 100_000_000_000n), 11_111_111_111n);
+  // The minimum gross raise is 30,303.030303 USDC ($30,000 net): the opening ceiling is $3,030.303031 until others commit more than nine times it.
+  assert.equal(MINIMUM_GROSS_RAISE, 30_303_030_303n);
+  assert.equal(walletCeiling(MINIMUM_GROSS_RAISE, 0n), 3_030_303_031n);
+  assert.equal(walletCeiling(MINIMUM_GROSS_RAISE, 27_272_727_272n), 3_030_303_031n);
+  assert.equal(walletCeiling(MINIMUM_GROSS_RAISE, 27_272_727_288n), 3_030_303_032n);
+  assert.equal(walletCeiling(MINIMUM_GROSS_RAISE, 100_000_000_000n), 11_111_111_111n);
   const Q96 = 1n << 96n;
   assert.equal(walletAllowance({ ceiling: 1000n, committed: 400n, tokensHeld: 0n, clearingPriceQ96: Q96 }), 600n);
   assert.equal(walletAllowance({ ceiling: 1000n, committed: 1000n, tokensHeld: 0n, clearingPriceQ96: Q96 }), 0n);
   assert.equal(walletAllowance({ ceiling: 1000n, committed: 1200n, tokensHeld: 0n, clearingPriceQ96: Q96 }), 0n);
   // The 30M-token cap binds when the wallet already holds almost all of it: 5 tokens left at twice the unit price.
-  assert.equal(walletAllowance({ ceiling: 10n ** 30n, committed: 0n, tokensHeld: GEN8_TOKEN_CAP - 5n * 10n ** 18n, clearingPriceQ96: 2n * Q96 }), 10n * 10n ** 18n);
-  assert.equal(walletAllowance({ ceiling: 10n ** 30n, committed: 0n, tokensHeld: GEN8_TOKEN_CAP + 1n, clearingPriceQ96: Q96 }), 0n);
+  assert.equal(walletAllowance({ ceiling: 10n ** 30n, committed: 0n, tokensHeld: TOKEN_CAP - 5n * 10n ** 18n, clearingPriceQ96: 2n * Q96 }), 10n * 10n ** 18n);
+  assert.equal(walletAllowance({ ceiling: 10n ** 30n, committed: 0n, tokensHeld: TOKEN_CAP + 1n, clearingPriceQ96: Q96 }), 0n);
 });
 test("live slots and the lifetime cap count exited and outbid bids as the hook does", () => {
   const live = [position(0n), position(1n)], outbid = position(2n, { outbid: true }), exited = position(3n, { exited: true });
@@ -98,7 +98,7 @@ test("witness data is exactly abi.encode(BidWitness[]) with at most twelve uint6
   assert.throws(() => decodeBidWitnesses(`${data}00` as Hex), OxleyError);
 });
 test("bid and rebid calldata encode the compiled router ABI and validate every field", () => {
-  const abi = full("ElysiumCcaBidRouterGen8"), witnesses = [{ lastFull: 10n, outbid: 30n }];
+  const abi = full("bid-router"), witnesses = [{ lastFull: 10n, outbid: 30n }];
   const input = { dealId: id32(5), maxPriceQ96: 2000n, previousTick: 1500n, deadline: 99n, entered: 100_000_000n, witnesses, chainId: 99801, bidRouter: addr(26) };
   const bid = buildDynamicBid(input);
   assert.deepEqual([bid.to, bid.value, bid.chainId], [addr(26), 0n, 99801]);

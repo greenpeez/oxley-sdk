@@ -4,10 +4,10 @@ import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
-import { createPublicClient, createWalletClient, createTestClient, http, keccak256, parseEventLogs, toHex,
+import { createPublicClient, createWalletClient, createTestClient, encodeFunctionData, http, keccak256, parseEventLogs, toHex,
   zeroAddress, type Abi, type Address, type Hex } from "viem";
 import { anvil } from "viem/chains";
-import { buildAuctionBid, buildAuctionBidApprovals, buildAuctionClaim, buildAuctionRefund,
+import { buildAuctionBidApprovals, buildAuctionClaim, buildAuctionRefund,
   auctionBidRouterAbi, ccaAuctionAbi } from "../../src/auctions.js";
 import { tokenAbi } from "../../src/abis.js";
 
@@ -15,7 +15,8 @@ interface Contract { address: Address; abi: Abi }
 interface Artifact { abi: Abi; bytecode: Hex }
 const artifact = async (name: string): Promise<Artifact> => JSON.parse(await readFile(new URL(`../fixtures/${name}.json`, import.meta.url), "utf8"));
 
-test("auction SDK executes real bid-router and vendor CCA bytecode locally", { timeout: 180_000 }, async t => {
+// The retained bid router, adapter and fee router are scaffolding that places bids on a real vendor CCA; what the test exercises is the SDK's approvals, exits and claims.
+test("auction SDK recovery transactions execute against real vendor CCA bytecode locally", { timeout: 180_000 }, async t => {
   assert.ok(process.env.ANVIL_BIN, "Set ANVIL_BIN; this suite never sends to a funded network");
   const port = await new Promise<number>(resolve => {
     const server = createServer(); server.listen(0, "127.0.0.1", () => {
@@ -83,8 +84,9 @@ test("auction SDK executes real bid-router and vendor CCA bytecode locally", { t
     const allowance = await rpc.readContract({ address: quote.address, abi: tokenAbi, functionName: "allowance", args: [account, f.router.address] });
     for (const approval of buildAuctionBidApprovals({ chainId: 31337, quoteToken: quote.address, bidRouter: f.router.address, debit, currentAllowance: allowance }))
       await confirmed(await wallet.sendTransaction({ ...approval, account }));
-    const transaction = buildAuctionBid({ chainId: 31337, bidRouter: f.router.address, dealId: f.id, entered: amount,
-      maxPriceQ96: price, previousTick: f.floor, deadline: (await rpc.getBlock()).timestamp + 3600n });
+    const deadline = (await rpc.getBlock()).timestamp + 3600n;
+    const transaction = { to: f.router.address, value: 0n,
+      data: encodeFunctionData({ abi: f.router.abi, functionName: "submitBid", args: [f.id, price, amount, f.floor, deadline] }) };
     const before = await balance(quote, account);
     const receipt = await confirmed(await wallet.sendTransaction({ ...transaction, account, gas: 3_000_000n }));
     const events = parseEventLogs({ abi: auctionBidRouterAbi, logs: receipt.logs, eventName: "AcceptedBidFee" });

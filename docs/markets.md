@@ -1,173 +1,167 @@
-# Current Markets
+# Trading Markets
 
-Available since `@oxley/sdk@0.6.0-next.1`. Earlier releases bound one curve, the flat-fee
-release, so they could not trade the markets that launched on newer curves. This guide
-covers `createOxleyMarkets`, which routes each market to the curve that holds it, plus
-the Gen3 and Gen8 behaviors an integrator meets: terms acceptance, the trading gate and
-the decaying opening surcharge. Trading fees you add on top are in
-[integrator fees](integrator-fees.md); Gen8 bidding is in [auctions](auctions.md#gen8-dynamic-bids).
+`createOxleyClient` is bound to one reviewed deployment: its curve, market registry, USDC
+(Oxy-USDC on testnet) and terms registry. It discovers active markets, reads quotes from the
+curve's own views, builds unsigned swaps and reads or prepares terms acceptance. Nothing
+signs or sends: an app, bot or AI agent signs and sends the returned transactions with its own
+wallet. Fees you add on top are in [integrator fees](integrator-fees.md); bidding
+in the auction that creates a market is in [auctions](auctions.md).
 
-## Supported Generations
-
-Testnet, chain `99801`, Oxy-USDC. Counts are `MarketActivated` events read from each curve
-on 2026-10-29 and will grow.
-
-| Generation | Release | Curve | Activated markets | Notes |
-| --- | --- | --- | --- | --- |
-| `flat-fee` | `elysium-auctions-flat-fee-7006d7889ab293d3` | `0x18bf92514c0d749a017aaf69153442703e1a966b` | 8 | MAYHEM, GNX, EUSEXUA, IRON, RAINBOW, DOBUN, KPROOF, THOR. No terms, no gate. |
-| `gen3` | `elysium-auctions-gen3-aac49c62c3855f41` | `0xb7e3e9b2ea74e3051f5c40ce7eb0486b0ab793d3` | 13 | G3CHECK, CATE, GATE, BG, FIRE, MESSI, YUI, 12, MILADY, OB, MGN, BEAR, VT. Terms, gate, opening surcharge. |
-| `gen8` | `elysium-auctions-gen8-969bd0e317da4145` | `0x434fd4f556800634399b9f96a4d148de215458e5` | 0 | Quote-only curve. No longer the launch generation. Its first auction (G8TEST) failed, so no market is active yet. |
-| `gen10` | `elysium-auctions-gen10-1fa4ef2a98fd14ed` | `0x68926b5e1b479c1ba32fe8e87699dfe5cfe7bd91` | not recorded | The current launch generation: the Gen9 contracts with a $30,000 net minimum raise. Start block 25237151. |
-
-Manifests: `deployments/elysium-testnet.json`, `elysium-testnet-gen3.json`, `elysium-testnet-gen8.json` and
-`elysium-testnet-gen10.json`, each verified by runtime code hash exactly like the original
-flat-fee manifest. They are bundled as `testnetDeployments` (oldest first, so the current launch generation is last),
-so no file access is needed.
-
-`gen9` is the Gen8 contract stack redeployed with a cap on the launch floor price. It trades exactly like
-Gen8 (same views, calldata, terms and gate) and runs beside it. Its manifest
-`deployments/elysium-testnet-gen9.json` is not in the bundle: `gen9TestnetDeployment` is `undefined`, and a Gen9
-manifest can be passed in `deployments` (for example `[...testnetDeployments, gen9Manifest]`) to trade its markets.
-Gen9 no longer takes new launches; its existing markets keep trading, bidding and claiming.
-
-`gen10` is the Gen9 stack redeployed with one change: the launch controller's net minimum raise is **$30,000**
-(`minimumRaise()` is 30,000,000,000 and `minimumGrossRaise()` 30,303,030,303 in USDC base units) instead of $50,000
-(50,505,050,505 gross) on Gen8 and Gen9. It is a constructor-only literal, so the runtime ABI, bid rules, curve views,
-calldata, floor cap and error codes are Gen9's. It trades exactly like Gen8 and Gen9 and reuses **Gen9's terms
-registry** (`0x94c8c7203e2a01e37f104fa6cbe00382642c084d`): a wallet that accepted the terms for a Gen9 market is already
-accepted on Gen10. Because the registry pin is common to the two releases, the Gen9 and Gen10 manifests share that one
-address; every other contract differs. Deal IDs are still resolved on chain, so a market lives on exactly one curve.
-The current launch generation follows the application: it launches on the newest generation of this family, so a new
-auction is created on Gen10 while Gen8 and Gen9 markets are only traded, bid on and claimed.
-
-Not supported, and why:
-
-- **Gen2** (`elysium-auctions-gen2-4f28738faf30190d`): all 14 of its auctions failed, so its
-  curve holds no market. `deployments/elysium-testnet-gen2.json` keeps its fork-rehearsal
-  addresses (`planned-fork-addresses`) and still fails closed.
-- **Bonded-v2 and older curves**, which hold the original PENELOPE, ODYSSEUS, RODEO and MINI
-  markets (curve `0x09cbc6c279376107f59c8609286adfbe16bfa323`). They are a deprecated family
-  with several controllers and no reviewed manifest in this SDK. The flat-fee client never
-  reached them; their IDs resolve to `UNSUPPORTED_MARKET`.
-
-## Resolve And Trade
+## Connect
 
 ```ts
 import { createPublicClient, http } from 'viem';
-import { createOxleyMarkets } from '@oxley/sdk';
+import { createOxleyClient, testnetDeployment } from '@oxley/sdk';
 
-const markets = createOxleyMarkets({
+const sdk = createOxleyClient({
+  deployment: testnetDeployment, // or the JSON at @oxley/sdk/deployments/elysium-testnet.json
   publicClient: createPublicClient({ transport: http('https://testnet-rpc.elysium.kinetiq.xyz') }),
 });
-await markets.verifyDeployments(); // pins, bindings, terms registry, decimals for every generation
-
-const { market, entry } = await markets.resolveMarket(dealId); // entry.generation: 'flat-fee' | 'gen3' | 'gen8' | 'gen10' (| 'gen9' once its manifest is bundled)
-const swap = await markets.prepareSwap({ marketId: dealId, tokenIn: market.quoteToken, tokenOut: market.coin,
-  amountIn: 10_000_000n, caller: wallet, slippageBps: 50 });
-const funding = await markets.checkSwap(swap); // routed by swap.quote.releaseId
+await sdk.verifyDeployment();
 ```
 
-**How a market is resolved.** `resolveMarket(dealId)` asks every generation concurrently:
-its registry must list the deal as profile `Cca`, status `Active`, with that generation's
-controller and the quote token as reserve, and its curve's `market(dealId)` must be active
-with the same coin and creator. Exactly one generation may match. Nothing is inferred from a
-symbol, a token address or an HTTP response.
+`verifyDeployment()` checks, at one block: the runtime code hash of the curve, registry, USDC
+and terms registry (`CODE_MISMATCH`); that the curve's quote asset is the pinned USDC with six
+decimals (`QUOTE_BINDING_MISMATCH`); that the curve's terms registry is the pinned one
+(`TERMS_BINDING_MISMATCH`); and that the block is still canonical (`REORG`). Every other call
+verifies lazily once per client. The public RPC is rate-limited: use your own transport,
+batching or pacing.
 
-- No match: `UNSUPPORTED_MARKET` (`details.checked` lists the releases asked). A failed read or
-  a failed verification in a generation is rethrown instead, never reported as "not found".
-- Two matches: `AMBIGUOUS_MARKET`. A hit in one generation stands even if another could not be read.
-- A successful resolution is remembered for the life of the object.
-- `resolveMarket(dealId, { identity })` accepts the data API's `deploymentIdentity` (or any
-  `{ chainId?, curve: { address, runtimeCodeHash? } }`). It only picks the candidate: an
-  identity that matches no reviewed curve is `UNKNOWN_DEPLOYMENT`, and one whose curve does not
-  list the deal on chain is `IDENTITY_MISMATCH`. Public catalog rows often carry
-  `deploymentIdentity: null`; resolve those without it.
+## Discover And Validate Markets
 
-Everything else routes the same way: `quote`, `prepareSwap`, `prepareSwapWithFee`,
-`getTradingStatus`, `getTermsStatus` and `prepareAcceptTerms` by market; `checkSwap` and
-`checkSwapWithFee` by the release that prepared the swap. `markets.client('gen3')` (or a
-release ID) returns the single-deployment client from `createOxleyClient`, which is still
-exported and unchanged for the flat-fee manifest.
+```ts
+import type { DiscoveryCursor } from '@oxley/sdk';
 
-`discoverMarkets({ cursors?, pageSize?, ... })` scans each generation's `MarketActivated`
-events from its start block, at most 10,000 blocks per page per generation, and returns
-`cursors` to resume. A complete history needs many pages: use the indexed
-[data API](data-api.md) to display catalogs and `resolveMarket` for the deal a user picks.
+let cursor: DiscoveryCursor | undefined;
+for (;;) {
+  const page = await sdk.discoverMarkets({ cursor, pageSize: 10_000 });
+  for (const market of page.markets) console.log(market.id, market.coin, market.creator);
+  cursor = page.cursor; // persist it to resume later
+  if (!page.hasMore) break;
+}
+```
 
-## What Differs By Generation
+`discoverMarkets` scans the curve's `MarketActivated(dealId, coin, creator, quoteSeed)` events
+from the deployment's start block, at most 10,000 blocks per page, and returns a
+block-hash-checked `cursor` to resume from (`REORG` if it was reorganized, `INVALID_CURSOR`
+for another deployment). Options: `cursor` or `fromBlock`, `toBlock`, `pageSize`, `coin`. A
+complete history needs many pages: use the indexed [data API](data-api.md) to display
+catalogs and `getMarket(dealId)` for the market a user picks.
 
-| | flat-fee | Gen3 | Gen8 (and Gen9, Gen10) |
-| --- | --- | --- | --- |
-| `quoteBuy` / `quoteSell` | `(id, amount, account)`; sell returns a collateral leg | same | `(id, amount)`; no account, no collateral leg |
-| `sell` arguments | `id, coinIn, minQuote, minCollateral, deadline` | same | `id, coinIn, minQuote, deadline` |
-| `market()` has a reserve asset | yes | yes | no (the registry's reserve is the quote token) |
-| Trading gate | none | yes | yes |
-| Terms registry on buy/sell | no | yes | yes |
-| Opening surcharge on buys | no | yes | yes |
+A deal ID is a market only if, at one block, the registry lists it as profile `Cca` and
+status `Active` with the deployment's controller and USDC as reserve, and the curve's
+`market(dealId)` is active with the same coin and creator, a distinct 18-decimal coin. Nothing
+is inferred from a symbol, a token address or an HTTP response. Anything else is
+`UNSUPPORTED_MARKET`; `getMarket` returns `{ market, blockNumber, blockHash, timestamp }`.
 
-The SDK selects views and calldata from the market's generation (`market.generation`), and
-`buildSwap` encodes by the quote's market, so a Gen8, Gen9 or Gen10 quote can never produce a five-argument
-sell. Quotes come from the curve's own views; the SDK never re-implements pricing. A Gen3
-sell quote with a collateral leg is refused (`COLLATERAL_OUTPUT`), as before.
+## Curve Interface
+
+| Call | Shape |
+| --- | --- |
+| `quoteBuy(id, grossQuoteIn)` | view; returns `(coinOut, feeAmount)` |
+| `quoteSell(id, coinIn)` | view; returns `(quoteOut, feeAmount)` |
+| `buy(id, grossQuoteIn, minimumCoinOut, deadline)` | exact input |
+| `sell(id, coinIn, minimumQuoteOut, deadline)` | exact input; four arguments |
+
+The curve is quote-only: it holds no reserve asset of its own and quote views take no account
+argument (the fee does not depend on the caller). Outputs
+are net of fees, so do not subtract fees again; `feeAmount` is in USDC base units on both
+sides. Approvals, balances and output belong to the immediate caller. The full compiler ABI is
+`@oxley/sdk/abis/curve.json`.
+
+## Quote And Swap
+
+```ts
+const { market } = await sdk.getMarket(dealId);
+const swap = await sdk.prepareSwap({ marketId: dealId, tokenIn: market.quoteToken, tokenOut: market.coin,
+  amountIn: 10_000_000n, caller: wallet, slippageBps: 50 });
+const funding = await sdk.checkSwap(swap); // balance, allowance, approvals, terms
+// Send funding.approvals in order and wait for receipts; prepare a fresh swap, run
+// checkSwap(fresh, true) to simulate, then send fresh.transaction from `wallet`.
+```
+
+- `quote({ marketId, tokenIn, tokenOut, amountIn, caller, blockNumber? })` accepts only the
+  market's coin/USDC pair (`UNSUPPORTED_PAIR`) and refuses a quote with no output
+  (`ZERO_OUTPUT`). It returns the amounts, `feeAmount` and, on buys, `openingSurchargeWad`.
+  `quoteMany(requests, blockNumber?)` quotes 1 to 64 samples at one block and returns each as
+  a settled result, never a plausible zero.
+- `prepareSwap` adds `slippageBps` (0 to 9999) and `ttlSeconds` (1 to 3600, default 300) and
+  returns the unsigned `transaction`, the exact `allowance` it needs, `minAmountOut` and
+  `deadline`. A quote for a closed market fails closed (`TRADING_NOT_OPEN`).
+- `checkSwap(swap, simulate?)` re-quotes and rebuilds the calldata. It refuses an expired swap
+  (`EXPIRED_DEADLINE`), one from another deployment or with altered calldata (`SWAP_MISMATCH`)
+  and an output below the minimum (`SLIPPAGE`). It returns `approvals` (exact, zero-first),
+  `balance`, `allowance`, `sufficientBalance`, `termsAccepted` and `terms`; with `simulate` it
+  also needs accepted terms, balance and confirmed approvals, then simulates and estimates gas.
+- Offline: `buildSwap(quote, { slippageBps, deadline })`, `buildApprovals(swap, allowance)`
+  and `minimumAmountOut(amountOut, slippageBps)`.
+
+Quotes always come from the curve's own views; the SDK never re-implements pricing. For the
+0x BASIC action see [0x](0x.md).
 
 ## Terms
 
-Gen3 and Gen8 curves call `termsRegistry.requireAccepted(msg.sender)` on `buy` and `sell`.
-Enforcement is off while the registry's `requiredVersion` is zero, which is the case on
-both testnet registries today (nothing has been published). When it is turned on, a wallet
-that has not accepted gets a `TermsNotAccepted` revert.
+The curve and the Dynamic Bids hook enforce one terms registry (`deployment.termsRegistry`).
+Enforcement is off while the registry's `requiredVersion` is zero; once it is on, a wallet
+that has not accepted gets a `TermsNotAccepted` revert on `buy`, `sell` and bids.
 
 ```ts
-const status = await markets.getTermsStatus({ marketId: dealId, account });
+const status = await sdk.getTermsStatus(account);
 // { enforced, accepted, requiredVersion, latestVersion, acceptedVersion, termsHash, uri, termsRegistry }
-const { transaction } = await markets.prepareAcceptTerms({ marketId: dealId, account });
+const { transaction } = await sdk.prepareAcceptTerms({ account });
 // null when nothing is required or the account already accepted; otherwise an unsigned,
 // simulated acceptTerms(requiredVersion, termsHash) for the registry the curve is bound to.
 ```
 
-Accepting is the user's own legal act: show the text at `uri`, check that its keccak256
-equals `termsHash`, and send the transaction from the user's wallet. Flat-fee curves report
-`termsRegistry: null, accepted: true`. `checkSwap` and `checkSwapWithFee` return
-`termsAccepted` and `terms`, and refuse to simulate (`TERMS_NOT_ACCEPTED`) until the account
-has accepted. `buildAcceptTerms({ chainId, termsRegistry, version, termsHash })` encodes the
-call offline. The SDK does not relay gasless acceptances.
+Accepting is the user's own legal act: show the text at `uri`, check that its keccak256 equals
+`termsHash`, and send the transaction from the user's wallet. `buildAcceptTerms({ chainId,
+termsRegistry, version, termsHash })` encodes the call offline. The SDK does not relay
+gasless acceptances.
 
 ## Trading Gate And Opening Surcharge
 
-After settlement a Gen2+ curve stays closed until every bid is delivered, or five minutes
-after activation at the latest (Gen3, Gen8). Quotes and swaps fail closed with
-`TRADING_NOT_OPEN`; `getTradingStatus(marketId)` returns `{ gated, open, fallbackAt }`.
+After settlement the curve stays closed until every successful bid is delivered, or until its
+timed fallback passes. `getTradingStatus(marketId)` returns `{ marketId, open, fallbackAt }`
+plus the observation block; quotes and swaps fail closed with `TRADING_NOT_OPEN`
+(`details.fallbackAt`).
 
-Buys on Gen3 and Gen8 pay the standard 2% plus a surcharge that starts at 18% at the trading
-opening and halves every 10 seconds, with linear steps in between, reaching zero at 60
-seconds. The total buy fee is therefore 20% at the opening, 15.5% at 5 s, 11% at 10 s, 4.25% at 30 s and 2% from 60 s.
-Sells never pay it. The curve's `quoteBuy` already includes it, so `quote.feeAmount` and
-`quote.amountOut` are the real figures at the quote block and `quote.openingSurchargeWad` reports the
-rate that was applied (WAD, 1e18 = 100%). Execution happens later, so the charged rate can only be
-lower; your minimum output is built from the quote and stays safe. Two consequences:
+Buys pay the standard 2% plus a surcharge that starts at 18% when trading opens, halves every
+10 seconds with linear steps in between and is zero from 60 seconds. The total buy fee is 20%
+at the opening, 15.5% at 5 s, 11% at 10 s, 4.25% at 30 s and 2% from 60 s. Sells never pay it.
+The curve's `quoteBuy` already includes it, so `quote.feeAmount` and `quote.amountOut` are the
+real figures at the quote block and `quote.openingSurchargeWad` (WAD, 1e18 = 100%) reports the
+rate that was applied. Execution happens later, so the charged rate can only be lower and a
+minimum output built from the quote stays safe.
 
-- **Gen8 starts the clock at the first successful trade**, not at activation. Until a trade
-  or `syncTradingOpened` records it, the quote shows the full 18% surcharge, and the first
-  buyer pays it. Show this to users before the first buy in a Gen8 market.
-- Elysium mines no empty blocks, so the head block (and therefore the quote's clock) can be
-  hours old on a quiet chain. Treat quotes as upper bounds on the surcharge, not as live timers.
+- The curve records when trading opened (`opening(dealId)`, set by the first trade or
+  `syncTradingOpened(dealId)`); until then a quote shows the full 18% surcharge. Show this to
+  users before the first buy in a market.
+- Elysium mines no empty blocks, so the head block, and the quote's clock with it, can be hours
+  old on a quiet chain. Treat quotes as upper bounds on the surcharge, not as live timers.
 
-For countdowns, `openingSurchargeWadAt(elapsedSeconds)`, `openingSurchargeAmount(gross, rate)` and
-`buyFeeBps(rate)` mirror the contract schedule; `scripts/check-markets-testnet.ts` proves
-the mirror equals `surchargeWadAt` on both curves. The curve stays the authority.
+For countdowns, `openingSurchargeWadAt(elapsedSeconds)`, `openingSurchargeAmount(gross, rate)`
+and `buyFeeBps(rate)` mirror the schedule; `npm run test:live:markets` checks the mirror
+against the curve's `surchargeWadAt`. The curve stays the authority.
 
 ## Errors
 
-`OxleyError.code` values added or widened in this release: `UNSUPPORTED_MARKET`,
-`AMBIGUOUS_MARKET`, `UNKNOWN_DEPLOYMENT`, `IDENTITY_MISMATCH`, `TERMS_NOT_ACCEPTED`,
-`TERMS_BINDING_MISMATCH`, `TERMS_ACCEPTANCE_REVERTED`, `INVALID_TERMS_STATE`,
-`TRADING_NOT_OPEN`. `decodeOxleyRevert(error, { generation })` also decodes `TermsNotAccepted`,
+| Code | Meaning |
+| --- | --- |
+| `UNSUPPORTED_MARKET`, `UNSUPPORTED_PAIR`, `ZERO_OUTPUT` | Not an active market of this deployment; wrong token pair; no output |
+| `TRADING_NOT_OPEN`, `INVALID_TRADING_GATE` | The gate is closed; gate state is inconsistent |
+| `TERMS_NOT_ACCEPTED`, `TERMS_BINDING_MISMATCH`, `TERMS_ACCEPTANCE_REVERTED`, `INVALID_TERMS_STATE` | Terms standing and registry binding |
+| `SWAP_MISMATCH`, `SLIPPAGE`, `EXPIRED_DEADLINE` | Re-check of a prepared swap failed |
+| `INSUFFICIENT_BALANCE`, `APPROVAL_REQUIRED` | Raised by `checkSwap(swap, true)` before simulating |
+| `INVALID_CURSOR`, `INVALID_PAGE_SIZE`, `INVALID_RANGE`, `BATCH_SIZE`, `INVALID_TTL`, `INVALID_SLIPPAGE` | Input limits |
+| `CHAIN_MISMATCH`, `CODE_MISMATCH`, `QUOTE_BINDING_MISMATCH`, `REORG` | Deployment or observation differs from the manifest |
+
+`decodeOxleyRevert(error)` turns on-chain reverts (`TermsNotAccepted`, `TradingNotOpen`,
 `BuysPaused`, `MinimumNotMet`, `DeadlineExpired`, `QuoteDust`, `CapitalShortfall` and the
-Gen8 bid errors into short messages.
+bid errors) into short messages.
 
 ## Verification
 
-`npm run test:live:markets` is a read-only check against the public testnet RPC: it verifies
-all three generations, resolves live flat-fee and Gen3 markets, quotes and prepares fee-bearing
-swaps (buys and sells) without any balance, checks the batches, reads terms state, compares the
-surcharge mirror with both curves, and verifies the Gen8 auction graph. It signs and sends nothing.
+`npm run test:live:markets` is a read-only check against the public testnet RPC with no
+signer: it verifies the trading deployment and the auction graph, compares the surcharge
+mirror with the curve, and, when `OXLEY_MARKET_ID` names an activated market, quotes it and
+prepares fee-bearing buys and sells without any balance.
