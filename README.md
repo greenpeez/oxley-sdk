@@ -290,7 +290,7 @@ await oxley.report({ buildId: build.buildId, txHash: hash! }); // counts the vol
 | Method | Result |
 | --- | --- |
 | `requestAgentApiKey({ signer })`, `prepareAgentKeyRequest(address)`, `issueKey(...)`, `revokeKey()` | A key for a wallet that signs the key message (EOA, at most 3 live keys) |
-| `me()` | Tier, limits, 30-day confirmed volume and the next tier. Starter for a new key; Builder at $50,000, Growth at $100,000, Pro at $500,000 |
+| `me()` | Tier, limits (swap and bridge), 30-day confirmed volume and the fee-paying part that moves the tier by itself. Starter for a new key; Builder at $50,000, Growth at $100,000, Pro at $500,000 of fee-paying volume |
 | `swapTokens()`, `swapPrice(...)`, `buildSwap(...)`, `swapStatus(...)` | Swap's tokens, an indicative price, the unsigned steps with a `buildId`, a sent swap's outcome |
 | `bridgeConfig()`, `bridgeQuote(intent)`, `buildBridge({ ...intent, via })`, `bridgeStatus(...)` | Chains and lanes, every hop's quote, the first leg's unsigned steps, a transfer's progress |
 | `report({ buildId, txHash })` | Counts a sent build once its receipt matches the build |

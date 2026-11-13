@@ -9,12 +9,12 @@ entry points, the manifest and every existing export are as in `0.7.0-next.2`. T
 ### Added
 
 - `createOxleyAgentClient({ apiKey, baseUrl?, fetch?, timeoutMs?, retries?, maxRetryWaitMs? })`:
-  - keys: `issueKey`, `revokeKey`, `me` (tier, limits, 30-day confirmed volume, next tier);
+  - keys: `issueKey`, `revokeKey`, `me` (tier, swap and bridge limits, 30-day confirmed volume and its fee-paying part, next tier);
   - swaps: `swapTokens`, `swapPrice`, `buildSwap`, `swapStatus` (the best of 0x's routes and Nest's pools);
   - the bridge: `bridgeConfig`, `bridgeQuote`, `buildBridge` (pass `via`, the provider that quoted the first leg), `bridgeStatus`;
-  - `report` (counts a sent build's volume toward the key's tier once its receipt matches the build) and `openApi`.
+  - `report` (counts a sent build's volume once its receipt matches the build; only fee-paying volume moves the tier, by itself) and `openApi`.
 - Every call checks its input before sending (`INVALID_REQUEST`): addresses, base-unit amounts, slippage of 10 to 500 bps, integrator fees and hashes. Every refusal is an
-  `AgentApiError` with the API's `code`, `status` and `reason`. A 429 (the key's limit, or the API's `BUSY` ceiling) is waited out and sent again once by default when its
+  `AgentApiError` with the API's `code`, `status` and `reason`. A 429 (the key's limit, or the `BUSY` budget every key shares for 0x and Enso) is waited out and sent again once by default when its
   `retry-after` is at most 10 seconds; otherwise the error carries `retryAfterMs`. Answers are limited to 4 MB, and each call to 30 seconds by default.
 - Key requests: `agentKeyMessage(address, issuedAt)` (the exact EIP-191 message the API verifies, with the checksummed address) and `prepareAgentKeyRequest(address, now?)`.
   `requestAgentApiKey({ signer })` has the caller's own signer (a viem local account, or any `{ address, signMessage }`) sign the message, and returns the key, which is shown once.

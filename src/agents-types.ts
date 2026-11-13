@@ -17,10 +17,17 @@ export type AgentStep = Readonly<{ kind: "approval" | "transaction"; label: stri
 
 export type AgentKeyRequest = Readonly<{ address: Address; issuedAt: string; signature: `0x${string}` }>;
 export type AgentKeyIssued = Readonly<{ key: string; owner: Address; tier: string }>;
-export type AgentLimits = Readonly<{ quotesPerMinute: number; buildsPerMinute: number; quotesPerDay: number; readsPerMinute: number; maxIntegratorFeeBps: number }>;
+/** The limits that apply to a key now. `quotes*` and `builds*` are swap calls; bridge quotes and builds have their own, per minute and per UTC day. */
+export type AgentLimits = Readonly<{ quotesPerMinute: number; buildsPerMinute: number; quotesPerDay: number; readsPerMinute: number;
+  bridgeQuotesPerMinute: number; bridgeQuotesPerDay: number; bridgeBuildsPerMinute: number; bridgeBuildsPerDay: number; maxIntegratorFeeBps: number }>;
 export type AgentStanding = Readonly<{
-  owner: Address; tier: string; volume30dUsd: number; limits: AgentLimits;
-  /** Absent on the highest tier. */
+  owner: Address; tier: string;
+  /** All confirmed volume over 30 days, in USD. */
+  volume30dUsd: number;
+  /** The part that paid Oxley a fee: only this moves the key between tiers, by itself. */
+  feePayingVolume30dUsd: number;
+  limits: AgentLimits;
+  /** Absent on the highest tier. `remainingUsd` is the fee-paying volume still missing. */
   nextTier?: Readonly<{ name: string; minVolumeUsd: number; remainingUsd: number }>;
 }>;
 
@@ -31,7 +38,8 @@ export type SwapPrice = Readonly<{
   sellToken: Address; buyToken: Address; sellAmount: string;
   /** What arrives, in base units of the buy token, after every fee. */
   buyAmount: string; minBuyAmount?: string; liquidityAvailable?: boolean; sources?: readonly string[];
-  fee?: unknown; partnerFee?: SwapPartnerFee;
+  /** Oxley's own fee, when one is set: always inside the swap (0x's fee, or on a Nest pool route the swap transaction's own transfer to `recipient`). */
+  fee?: Readonly<{ amount: string; bps: number; token: Address; recipient?: Address }>; partnerFee?: SwapPartnerFee;
 }> & Readonly<Record<string, unknown>>;
 export type SwapQuote = SwapPrice & Readonly<{
   /** `pool` is a swap through Nest's pools. */
@@ -84,6 +92,6 @@ export type BridgeStatus = Readonly<{
   delivery: Readonly<{ state: "pending" | "inflight" | "delivered" | "failed" | "manual" | "unknown"; phase: string | null; destinationChainId: number | null; destinationTxHash: string | null }> | null;
   stale?: boolean; retryAfterMs?: number; report?: ReportOutcome | "unknown" | "invalid";
 }> & Readonly<Record<string, unknown>>;
-export type ReportResult = Readonly<{ outcome: ReportOutcome; volume30dUsd: number }>;
+export type ReportResult = Readonly<{ outcome: ReportOutcome; volume30dUsd: number; feePayingVolume30dUsd: number }>;
 
 export type AgentRequestOptions = Readonly<{ signal?: AbortSignal }>;

@@ -56,9 +56,9 @@ To sign elsewhere, use `prepareAgentKeyRequest(address)`, which returns `{ addre
 
 ## Tiers
 
-Volume is the USD value of the transactions a key built that were confirmed on chain, counted over the last 30 days. A key moves up as soon as its volume reaches a tier's line. It keeps its highest tier for 30 days after reaching it.
+Volume is the USD value of the transactions a key built that were confirmed on chain, counted over the last 30 days. Only **fee-paying volume** moves a key between tiers: volume Oxley charged its own fee on. Today that is a bridge leg that pays Oxley's bridge fee, and a swap once a Swap fee is set. The key moves by itself: it goes up as soon as its fee-paying volume reaches a tier's line, and keeps its highest tier for 30 days after reaching it.
 
-| Tier | Unlocks at | Quotes/min | Builds/min | Quotes/day | Reads/min | Integrator fee cap |
+| Tier | Unlocks at | Swap quotes/min | Swap builds/min | Swap quotes/day | Reads/min | Integrator fee cap |
 | --- | --- | --- | --- | --- | --- | --- |
 | Starter | a new key | 30 | 10 | 10,000 | 120 | 2% |
 | Builder | $50,000 | 120 | 40 | 50,000 | 300 | 2% |
@@ -66,15 +66,33 @@ Volume is the USD value of the transactions a key built that were confirmed on c
 | Pro | $500,000 | 600 | 200 | 500,000 | 1,200 | 2% |
 | Partner | by agreement | per key | | | | |
 
-These are the current numbers, and they can change without an SDK release. `client.me()` returns the ones that apply to the key now: its tier, its limits, its 30-day volume and the next tier (`nextTier.remainingUsd`).
+Bridge quotes and builds have their own limits, about one bridge quote a day for every $10 of a tier's line:
+
+| Tier | Bridge quotes/min | Bridge quotes/day | Bridge builds/min | Bridge builds/day |
+| --- | --- | --- | --- | --- |
+| Starter | 5 | 1,000 | 2 | 200 |
+| Builder | 20 | 5,000 | 10 | 1,000 |
+| Growth | 40 | 10,000 | 20 | 2,000 |
+| Pro | 100 | 50,000 | 50 | 10,000 |
+
+These are the current numbers, and they can change without an SDK release. `client.me()` returns what applies to the key now:
+
+- its tier and its limits;
+- `volume30dUsd`, all its confirmed volume;
+- `feePayingVolume30dUsd`, the part that moves its tier;
+- the next tier, where `nextTier.remainingUsd` is the fee-paying volume still missing.
 
 What each kind of call counts against:
 
-- **Quotes:** `swapPrice` and `bridgeQuote`.
-- **Builds:** `buildSwap` and `buildBridge`.
+- **Swap quotes:** `swapPrice`.
+- **Swap builds:** `buildSwap`.
+- **Bridge quotes:** `bridgeQuote`.
+- **Bridge builds:** `buildBridge`.
 - **Reads:** everything else.
 
-A call over a limit is refused with 429 and `retry-after`. So is a call that meets the API's shared ceiling on bridge calls (`BUSY`). Either way the server did nothing, so the client waits the time out and sends the call again. It does this once by default, and only when the wait is at most 10 seconds (`retries`, `maxRetryWaitMs`). Otherwise it throws `AgentApiError` with `retryAfterMs`.
+Daily limits are counted from midnight UTC.
+
+A call over the key's limits is refused with 429 `RATE_LIMITED` and `retry-after`. The API also holds every key's 0x and Enso calls to one budget a minute; a call past that budget is refused with 429 `BUSY`. Either way the server did nothing and no provider was asked. The client waits the time out and sends the call again, once by default and only when the wait is at most 10 seconds (`retries`, `maxRetryWaitMs`). Otherwise it throws `AgentApiError` with `retryAfterMs`.
 
 ## Swapping
 
@@ -117,7 +135,7 @@ What a report can return:
 
 | `outcome` | Meaning |
 | --- | --- |
-| `counted` | Counted toward the key's 30-day volume |
+| `counted` | Counted toward the key's 30-day volume (and its tier, when it paid Oxley a fee) |
 | `pending` | The receipt is not readable yet; report again shortly |
 | `failed` | The transaction did not succeed |
 | `mismatch` | Not from the build's sender to the build's contract |
@@ -138,7 +156,7 @@ The fee goes straight to `recipient`; Oxley never holds it. How it is taken depe
 | Swap through Nest's pools | A separate `Integrator fee` step, sent first. It transfers the fee's share of the input from the sender (`method` is `transfer`) |
 | Every bridge leg | A separate `Integrator fee` step, sent first, on the source chain (`integratorFee` on the answer) |
 
-Quoted amounts are after every fee. Oxley's own fee, when one is set, is shown in the answer's `fee`.
+Quoted amounts are after every fee. Oxley's own fee, when one is set, is shown in the answer's `fee`. It is always taken inside the swap and never adds a step: by 0x on a 0x route, and on a Nest pool route in the swap transaction itself (`fee.recipient` names the wallet). A swap that fails pays nothing.
 
 ## MCP
 
@@ -167,7 +185,7 @@ Every refusal is an `AgentApiError` with `code`, `status`, `reason` and, on a 42
 | `API_KEY_REQUIRED`, `API_KEY_INVALID` | No key, or one that is unknown or revoked |
 | `INVALID_INTEGRATOR_FEE` | A fee over the tier's cap, or a malformed one |
 | `RATE_LIMITED` | Over the key's per-minute or daily limit |
-| `BUSY` | The API's shared bridge ceiling |
+| `BUSY` | The budget every key shares for 0x and Enso calls |
 | `BAD_SIGNATURE` | The key message was not signed by the address |
 | `TOO_MANY_KEYS` | The wallet already holds 3 live keys |
 | `UNKNOWN_BUILD` | No build of this key has that id |
