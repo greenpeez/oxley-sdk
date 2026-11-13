@@ -127,8 +127,8 @@ A transfer with more than one hop is built one hop at a time. Once the first hop
 The report counts the build's volume once the receipt matches the build. To match, the transaction must:
 
 - have succeeded;
-- be from the build's sender, to the build's contract;
-- have landed within 24 hours of the build;
+- be from the build's sender, to the build's contract, with exactly the build's calldata and value;
+- have landed after the build and within 24 hours of it;
 - not have been counted before.
 
 What a report can return:
@@ -138,7 +138,7 @@ What a report can return:
 | `counted` | Counted toward the key's 30-day volume (and its tier, when it paid Oxley a fee) |
 | `pending` | The receipt is not readable yet; report again shortly |
 | `failed` | The transaction did not succeed |
-| `mismatch` | Not from the build's sender to the build's contract |
+| `mismatch` | Not the transaction that was built: another sender or contract, other calldata or value, or mined before the build |
 | `expired` | More than 24 hours after the build |
 | `duplicate` | Already counted |
 
