@@ -12,12 +12,12 @@ const root = process.cwd();
 const output = execFileSync("npm", ["pack", "--json", "--ignore-scripts"], { encoding: "utf8" });
 const [pack] = JSON.parse(output);
 const packed = path => pack.files.some(file => file.path === path);
-for (const path of ["dist/index.js", "dist/index.d.ts", "dist/data.d.ts", "dist/auctions.d.ts", "dist/launch.d.ts", "dist/metadata.d.ts", "dist/abis.d.ts", "dist/zero-ex.d.ts",
-  "docs/data-api.md", "docs/auctions.md", "docs/launch.md", "docs/creator.md", "docs/markets.md", "docs/integrator-fees.md", "docs/mainnet.md", "docs/live-artifacts.json",
+for (const path of ["dist/index.js", "dist/index.d.ts", "dist/data.d.ts", "dist/auctions.d.ts", "dist/launch.d.ts", "dist/metadata.d.ts", "dist/abis.d.ts", "dist/zero-ex.d.ts", "dist/agents.js", "dist/agents.d.ts",
+  "docs/data-api.md", "docs/agents.md", "docs/auctions.md", "docs/launch.md", "docs/creator.md", "docs/markets.md", "docs/integrator-fees.md", "docs/mainnet.md", "docs/live-artifacts.json",
   MANIFEST.file, "deployments/mainnet.template.json", "abis/curve.json", "abis/bid-router.json", "abis/bid-hook.json", "abis/terms-registry.json",
   "abis/cca-auction.json", "abis/auction-controller.json", "abis/adapter.json", "abis/registry.json", "abis/exposure-helper.json", "abis/creator-account.json",
   "abis/creator-account-factory.json", "abis/bond-escrow.json", "abis/entry-controller.json", "abis/fee-router.json", "examples/dynamic-bid.ts", "examples/integrator-fee.ts",
-  "examples/launch.ts", "examples/launch-floor.ts", "examples/scheduled-launch.ts", "examples/creator.ts", "examples/token-metadata.ts"]) assert.ok(packed(path), path);
+  "examples/launch.ts", "examples/launch-floor.ts", "examples/scheduled-launch.ts", "examples/creator.ts", "examples/token-metadata.ts", "examples/agents.ts"]) assert.ok(packed(path), path);
 for (const file of pack.files) {
   assert.ok(/^(dist\/|abis\/|docs\/|deployments\/|examples\/|README\.md$|LICENSE$|package\.json$)/.test(file.path), file.path);
   assert.ok(!/(\.env|node_modules|test\/|fixtures|\.log$|private.key)/i.test(file.path), file.path);
@@ -39,6 +39,7 @@ try {
     import * as metadata from '@oxley/sdk/metadata';
     import * as zeroEx from '@oxley/sdk/0x';
     import * as data from '@oxley/sdk/data';
+    import * as agents from '@oxley/sdk/agents';
     import deployment from '@oxley/sdk/deployments/elysium-testnet.json' with { type: 'json' };
     import template from '@oxley/sdk/deployments/mainnet.template.json' with { type: 'json' };
     import curveAbi from '@oxley/sdk/abis/curve.json' with { type: 'json' };
@@ -91,6 +92,16 @@ try {
       "validateTokenImage"])});
     assert.deepEqual(names(zeroEx), ['buildZeroExBasic', 'zeroExBasicAbi']);
     assert.deepEqual(names(data), ['DataApiError', 'createOxleyDataClient', 'isCurrentData']);
+    assert.deepEqual(names(agents), ${JSON.stringify([
+      "AGENT_KEY_ISSUE_WINDOW_MS", "AGENT_SWAP_CHAIN_ID", "AgentApiError", "MAX_AGENT_KEYS", "MAX_SLIPPAGE_BPS", "MIN_SLIPPAGE_BPS", "OXLEY_AGENT_API_URL", "agentKeyMessage",
+      "agentMcpServer", "agentTransaction", "checkAgentSteps", "createOxleyAgentClient", "prepareAgentKeyRequest", "requestAgentApiKey"])});
+    // The Agent API client: the key message the API verifies, and a call that carries the key, from the installed archive.
+    assert.equal(agents.agentKeyMessage('0x00000000000000000000000000000000000c0de1', '2026-11-13T09:30:00.000Z'),
+      'Oxley API key\\nAddress: 0x00000000000000000000000000000000000c0dE1\\nIssued at: 2026-11-13T09:30:00.000Z');
+    const agentCalls = [];
+    const agentClient = agents.createOxleyAgentClient({ apiKey: 'oxk_' + 'A'.repeat(43), fetch: async (url, init) => { agentCalls.push([String(url), init.headers.authorization]); return new Response('{"tier":"starter"}'); } });
+    assert.deepEqual(await agentClient.me(), { tier: 'starter' });
+    assert.deepEqual(agentCalls, [['https://oxley-agents.web3bandit.workers.dev/v1/me', 'Bearer oxk_' + 'A'.repeat(43)]]);
 
     // The bundled testnet deployment is the reviewed one, parses, and is the embedded export.
     const parsed = sdk.parseDeployment(deployment);

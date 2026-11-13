@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.7.0-next.3 - 2026-11-13
+
+Adds `@oxley/sdk/agents`, a fetch-only client for the hosted Oxley Agent API, so agents can swap and bridge through Oxley with an API key. It is the SDK's first mainnet surface:
+swaps on Elysium (chain 99901) and the bridge between Elysium, Ethereum, Arbitrum, Base, BNB, HyperEVM, Robinhood Chain and out to Solana. Nothing else changes: the Gen10 testnet
+entry points, the manifest and every existing export are as in `0.7.0-next.2`. The SDK still signs nothing and holds no key; every build is unsigned.
+
+### Added
+
+- `createOxleyAgentClient({ apiKey, baseUrl?, fetch?, timeoutMs?, retries?, maxRetryWaitMs? })`:
+  - keys: `issueKey`, `revokeKey`, `me` (tier, limits, 30-day confirmed volume, next tier);
+  - swaps: `swapTokens`, `swapPrice`, `buildSwap`, `swapStatus` (the best of 0x's routes and Nest's pools);
+  - the bridge: `bridgeConfig`, `bridgeQuote`, `buildBridge` (pass `via`, the provider that quoted the first leg), `bridgeStatus`;
+  - `report` (counts a sent build's volume toward the key's tier once its receipt matches the build) and `openApi`.
+- Every call checks its input before sending (`INVALID_REQUEST`): addresses, base-unit amounts, slippage of 10 to 500 bps, integrator fees and hashes. Every refusal is an
+  `AgentApiError` with the API's `code`, `status` and `reason`. A 429 (the key's limit, or the API's `BUSY` ceiling) is waited out and sent again once by default when its
+  `retry-after` is at most 10 seconds; otherwise the error carries `retryAfterMs`. Answers are limited to 4 MB, and each call to 30 seconds by default.
+- Key requests: `agentKeyMessage(address, issuedAt)` (the exact EIP-191 message the API verifies, with the checksummed address) and `prepareAgentKeyRequest(address, now?)`.
+  `requestAgentApiKey({ signer })` has the caller's own signer (a viem local account, or any `{ address, signMessage }`) sign the message, and returns the key, which is shown once.
+- Integrator fees: `integratorFee: { recipient, bps }` on prices, quotes and builds, up to the key's tier cap. It is paid inside the swap on a 0x route, and as a separate first
+  step on a Nest pool route and on every bridge leg.
+- Before signing: `checkAgentSteps(steps, { account, chainId? })`, a local check that every step is a well-formed transaction from `account` on one chain, ending in the build's
+  own transaction. `agentTransaction(step)` turns a step into a viem request with bigint value and gas.
+- `agentMcpServer(key)`: the `mcpServers` entry for the API's MCP server (Streamable HTTP at `POST /mcp`, 10 tools).
+- Constants: `OXLEY_AGENT_API_URL`, `AGENT_SWAP_CHAIN_ID` (99901), `AGENT_KEY_ISSUE_WINDOW_MS`, `MAX_AGENT_KEYS`, `MIN_SLIPPAGE_BPS`, `MAX_SLIPPAGE_BPS`.
+- `docs/agents.md` (keys, tiers, swaps, the bridge, sending and reporting, integrator fees, MCP, errors) and `examples/agents.ts` (a 10 USDC swap, end to end).
+
 ## 0.7.0-next.2 - 2026-11-08
 
 Adds the Gen10 creator actions to the launch client: the whole scheduled-launch lifecycle, the unused-bond claim, creator fee claims, and the publication of token details and images

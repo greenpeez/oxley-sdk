@@ -6,8 +6,10 @@ swaps, quotes and terms of those markets. Everything is read from chain through 
 client and returned as **unsigned** calldata; the SDK never signs, broadcasts or holds keys.
 It runs in Node.js 20+ and browser applications, with no Oxley API key, backend, callback,
 provider allowlist or Uniswap v4 hook.
+The one exception is opt-in: `@oxley/sdk/agents`, a client for the hosted Agent API (mainnet swaps and the
+bridge for agents, with an API key; see [below](#agent-api-swaps-and-the-bridge)).
 
-This repository contains the **Elysium SDK**, version `0.7.0-next.2`, as ESM with
+This repository contains the **Elysium SDK**, version `0.7.0-next.3`, as ESM with
 TypeScript declarations. The `0.7` line is a breaking release: the earlier flat-fee, Gen2,
 Gen3, Gen8 and Gen9 support and `createOxleyMarkets` are gone, and the launch client is back
 for Gen10 only (see the [changelog](CHANGELOG.md) for the removals and an old to new table of
@@ -52,6 +54,9 @@ again from fresh chain state; a timeout is never proof that nothing was sent. Wo
 [the launch guide](docs/launch.md) and its [example](examples/launch.ts), then
 [the auction guide](docs/auctions.md) and its [example](examples/dynamic-bid.ts).
 
+To swap on Elysium mainnet or bridge between chains, an agent uses the [Agent API](#agent-api-swaps-and-the-bridge) instead: an API key,
+tiered limits that rise with volume, integrator fees and an MCP server.
+
 ## Start Here
 
 - [Public Builders docs](https://oxley.fun/docs/builders) and [npm package](https://www.npmjs.com/package/@oxley/sdk).
@@ -61,6 +66,7 @@ again from fresh chain state; a timeout is never proof that nothing was sent. Wo
 - Trading the markets auctions create, terms and the opening surcharge: [markets](docs/markets.md).
 - Aggregators and exchanges: [provider handoff](docs/provider-handoff.md), [0x source guide](docs/0x.md), [mainnet requirements](docs/mainnet.md).
 - Wallets and apps adding their own fee: [integrator fees](docs/integrator-fees.md) and [example](examples/integrator-fee.ts).
+- Agents swapping and bridging on mainnet: [Agent API guide](docs/agents.md) (keys, tiers, swaps, the bridge, integrator fees, MCP) and [example](examples/agents.ts).
 - Frontend builders: [indexed data API](docs/data-api.md) and [polling example](examples/live-data.ts).
 - Launch floors: [launch floor rules](docs/launch.md#launch-floor-rules) and [example](examples/launch-floor.ts).
 - Evidence: [validation overview](docs/validation.md), [auction tests](docs/auction-validation.md), [live data checks](docs/data-validation.md).
@@ -89,6 +95,7 @@ dist-tags determine the default version.
 | `@oxley/sdk/launch` | `createOxleyLaunchClient` (verify, `prepareLaunch`, `getLaunch`, the scheduled-launch, bond refund and creator fee calls), the offline launch and creator-account builders, `launchDealId`, `newDraftSalt`, the exact-duration and schedule helpers, the launch ABIs and the pure launch-floor rules (`validateLaunchFloor`, `minimumRaiseFloor`, `quoteAuctionFloor`) |
 | `@oxley/sdk/metadata` | `createOxleyMetadataClient`: builds and sends the creator's signed token details and image publications (fetch-only; the SDK never signs), and the validators and EIP-712 typed data they use |
 | `@oxley/sdk/abis` | Every typed ABI subset |
+| `@oxley/sdk/agents` | `createOxleyAgentClient`: fetch-only client for the hosted Agent API (mainnet swaps and the bridge), `requestAgentApiKey`, `checkAgentSteps`, `agentTransaction`, `agentMcpServer`, `AgentApiError` |
 | `@oxley/sdk/0x` | `buildZeroExBasic`, the optional 0x BASIC source action |
 | `@oxley/sdk/data` | `createOxleyDataClient`: fetch-only client for the public indexed data API |
 | `@oxley/sdk/abis/*.json` | Full compiler ABIs of the deployed Gen10 build: `curve`, `bid-router`, `bid-hook`, `terms-registry`, `auction-controller`, `adapter`, `registry`, `exposure-helper`, `creator-account`, `creator-account-factory`, `bond-escrow`, `entry-controller`, `fee-router`, and the vendor `cca-auction`. Each typed ABI subset is tested against its file; [live-artifacts.json](docs/live-artifacts.json) proves which build they come from |
@@ -255,6 +262,43 @@ See the [public data API guide](docs/data-api.md) for every endpoint, model
 selection, numeric units, pagination, freshness, polling and release limitations.
 The [frontend example](examples/live-data.ts) handles cancellation and cooldowns.
 These feeds are for display, **not transaction preparation or signing authority**.
+
+## Agent API: Swaps And The Bridge
+
+`@oxley/sdk/agents` is a fetch-only client for the hosted Oxley Agent API. It runs on **mainnet**, unlike the rest of this SDK. It swaps on Elysium (chain `99901`) at the
+best of 0x's routes and Nest's pools, and bridges between Elysium, Ethereum, Arbitrum, Base, BNB, HyperEVM, Robinhood Chain and out to Solana. Every build comes back as unsigned
+steps, which the agent's own wallet sends in order.
+
+```ts
+import { privateKeyToAccount } from 'viem/accounts';
+import { agentTransaction, checkAgentSteps, createOxleyAgentClient, requestAgentApiKey } from '@oxley/sdk/agents';
+
+const account = privateKeyToAccount(process.env.AGENT_PRIVATE_KEY as `0x${string}`);
+const { key } = await requestAgentApiKey({ signer: account }); // once per wallet; the key is shown once
+const oxley = createOxleyAgentClient({ apiKey: key });
+const { tokens } = await oxley.swapTokens();
+const [usdc, hype] = ['USDC', 'HYPE'].map(symbol => tokens.find(token => token.symbol === symbol)!.address);
+const build = await oxley.buildSwap({ sellToken: usdc, buyToken: hype, sellAmount: '10000000', taker: account.address, slippageBps: 50 });
+let hash: `0x${string}` | undefined;
+for (const step of checkAgentSteps(build.steps, { account: account.address, chainId: 99901 })) {
+  hash = await wallet.sendTransaction({ account, ...agentTransaction(step) }); // a viem wallet client on Elysium
+  await publicClient.waitForTransactionReceipt({ hash }); // each step lands before the next
+}
+await oxley.report({ buildId: build.buildId, txHash: hash! }); // counts the volume toward the key's tier
+```
+
+| Method | Result |
+| --- | --- |
+| `requestAgentApiKey({ signer })`, `prepareAgentKeyRequest(address)`, `issueKey(...)`, `revokeKey()` | A key for a wallet that signs the key message (EOA, at most 3 live keys) |
+| `me()` | Tier, limits, 30-day confirmed volume and the next tier. Starter for a new key; Builder at $50,000, Growth at $100,000, Pro at $500,000 |
+| `swapTokens()`, `swapPrice(...)`, `buildSwap(...)`, `swapStatus(...)` | Swap's tokens, an indicative price, the unsigned steps with a `buildId`, a sent swap's outcome |
+| `bridgeConfig()`, `bridgeQuote(intent)`, `buildBridge({ ...intent, via })`, `bridgeStatus(...)` | Chains and lanes, every hop's quote, the first leg's unsigned steps, a transfer's progress |
+| `report({ buildId, txHash })` | Counts a sent build once its receipt matches the build |
+| `agentMcpServer(key)` | The `mcpServers` entry for the API's MCP server (`POST /mcp`, 10 tools) |
+
+Pass `integratorFee: { recipient, bps }` to add your own fee on top of Oxley's, up to the tier's cap. It is paid straight to `recipient`: inside the swap on a 0x route, or as a
+separate first step on a Nest pool route and on every bridge leg. A 429 is waited out once when its `retry-after` is short. Every refusal is an `AgentApiError` with the API's
+`code` and `reason`. See [the Agent API guide](docs/agents.md) and [example](examples/agents.ts).
 
 ## Independent Quotes And Minimums
 

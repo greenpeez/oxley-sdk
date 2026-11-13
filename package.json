@@ -1,7 +1,7 @@
 {
   "name": "@oxley/sdk",
-  "version": "0.7.0-next.2",
-  "description": "Oxley Gen10 auctions on Elysium: launches, market data, quotes, swaps (with optional integrator fees), terms, Dynamic Bids and rebids, and claim and refund transactions, as unsigned calldata for apps, bots and AI agents",
+  "version": "0.7.0-next.3",
+  "description": "Oxley Gen10 auctions on Elysium: launches, market data, quotes, swaps (with optional integrator fees), terms, Dynamic Bids and rebids, and claim and refund transactions, as unsigned calldata for apps, bots and AI agents; plus a client for the Oxley Agent API (mainnet swaps and the bridge, with API keys and an MCP server)",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -12,7 +12,7 @@
   "bugs": {
     "url": "https://github.com/greenpeez/oxley-sdk/issues"
   },
-  "keywords": ["oxley", "elysium", "usdc", "auctions", "launch", "dynamic-bids", "ai-agents", "dex", "aggregator", "0x"],
+  "keywords": ["oxley", "elysium", "usdc", "auctions", "launch", "dynamic-bids", "ai-agents", "mcp", "bridge", "dex", "aggregator", "0x"],
   "packageManager": "pnpm@10.32.1",
   "sideEffects": false,
   "engines": {
@@ -26,6 +26,10 @@
     "./abis": {
       "types": "./dist/abis.d.ts",
       "import": "./dist/abis.js"
+    },
+    "./agents": {
+      "types": "./dist/agents.d.ts",
+      "import": "./dist/agents.js"
     },
     "./0x": {
       "types": "./dist/zero-ex.d.ts",

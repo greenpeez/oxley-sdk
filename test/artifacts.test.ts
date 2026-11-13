@@ -100,7 +100,7 @@ test("every exported path exists and the changelog and README describe the relea
   for (const [path, target] of Object.entries(pkg.exports as Record<string, unknown>)) {
     for (const file of typeof target === "string" ? [target] : [] as string[]) assert.ok(existsSync(new URL(`../${file}`, import.meta.url)), `${path} -> ${file}`);
   }
-  assert.equal(pkg.version, "0.7.0-next.2");
+  assert.equal(pkg.version, "0.7.0-next.3");
   // An "Unreleased" section may sit above the released version's section.
   assert.match(read("CHANGELOG.md"), new RegExp(`^# Changelog\\n\\n(?:## Unreleased\\n[\\s\\S]*?\\n\\n)?## ${pkg.version.replace(/\./g, "\\.")} - `));
   assert.match(read("README.md"), new RegExp(`version \`${pkg.version.replace(/\./g, "\\.")}\``));
